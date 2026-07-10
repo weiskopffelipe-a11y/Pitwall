@@ -37,9 +37,9 @@
   /* --- team theming: recolors the app's dark panels and amber/cyan accents to the selected team's livery --- */
   @supports (color: color-mix(in srgb, red, blue)) {
     :root {
-      --bg950: color-mix(in srgb, var(--tp) 10%, #020617);
-      --bg900: color-mix(in srgb, var(--tp) 9%, #0f172a);
-      --bg800: color-mix(in srgb, var(--tp) 8%, #1e293b);
+      --bg950: color-mix(in srgb, var(--tp) 24%, #020617);
+      --bg900: color-mix(in srgb, var(--tp) 20%, #0f172a);
+      --bg800: color-mix(in srgb, var(--tp) 16%, #1e293b);
     }
   }
   body, .bg-slate-950 { background-color: var(--bg950) !important; }
@@ -77,7 +77,7 @@ const TEAMS = [
       { code: 'HAM', name: 'Lewis Hamilton', age: 41, role: 'race2', experience: 10, carFeel: 9, wet: 10, overtaking: 9, starts: 8, focus: 9, physical: 7, pace: 8 },
       { code: 'GIO', name: 'Antonio Giovinazzi', age: 32, role: 'reserve', experience: 6, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 7, physical: 6, pace: 6 },
     ] },
-  { id: 'rbr', name: 'Red Bull Racing', short: 'RBR', color: '#3671C6', secondary: '#FFC906', textOnPrimary: '#FFFFFF', engine: 'Red Bull Ford', carPace: 92, reliability: 87,
+  { id: 'rbr', name: 'Red Bull Racing', short: 'RBR', color: '#1E3A8A', secondary: '#E8002D', textOnPrimary: '#FFFFFF', engine: 'Red Bull Ford', carPace: 92, reliability: 87,
     drivers: [
       { code: 'VER', name: 'Max Verstappen', age: 28, role: 'race1', experience: 9, carFeel: 9, wet: 9, overtaking: 10, starts: 9, focus: 9, physical: 9, pace: 10 },
       { code: 'HAD', name: 'Isack Hadjar', age: 21, role: 'race2', experience: 4, carFeel: 7, wet: 6, overtaking: 7, starts: 5, focus: 6, physical: 7, pace: 8 },
@@ -209,7 +209,7 @@ const UPGRADE_CATEGORIES = [
   { id: 'reliability', label: 'Confiabilidade', icon: '🔧', paceW: 0.0, relW: 0.20 },
 ];
 const DEV_BASELINE = 65;
-const DEV_GROWTH_RATE = 7;
+const DEV_GROWTH_RATE = 18;
 const SALARY_ANCHORS = [[4.0, 0.08], [4.5, 0.11], [5.0, 0.15], [5.5, 0.28], [6.0, 0.40], [6.5, 0.52], [7.0, 0.65], [7.5, 0.80], [8.0, 0.96], [8.5, 1.10], [9.0, 1.20], [9.75, 1.35]];
 
 const RACE_PRIZE_MONEY = [0.125, 0.110, 0.100, 0.090, 0.080, 0.065, 0.050, 0.035, 0.025, 0.010];
@@ -340,6 +340,7 @@ function buildGrid(teamsList, playerTeamId, circuit, weatherStart) {
         reliability: team.reliability + (team.reliabilityBonus || 0),
         teamDevLevels: team.devLevels || null,
         experience: d.experience, carFeel: d.carFeel, wet: d.wet, overtaking: d.overtaking,
+        happiness: d.happiness != null ? d.happiness : 65,
         starts: d.starts, focus: d.focus, physical: d.physical, pace: d.pace,
         isPlayer: team.id === playerTeamId,
         position: 0, gridPosition: 0, raceTime: 0, gapToLeader: 0, lastLapDelta: 0,
@@ -546,6 +547,7 @@ function simulateLap(state) {
     const wearPenalty = (c.tyreWear / 100) * wearShape * 1.4 * tyreMgmtFactor;
     const wPenalty = weatherPenaltyFor(c, newWeather);
     const wetSkillBonus = newWeather.condition !== 'dry' ? (c.wet - 6.5) * 0.12 : 0;
+    const happinessBonus = ((c.happiness != null ? c.happiness : 65) - 55) * 0.006;
     const paceDef = PACE_MODES[c.paceMode];
     const noise = gauss() * (0.6 - c.focus * 0.045);
 
@@ -558,7 +560,7 @@ function simulateLap(state) {
     if (newFlag === 'sc' || newFlag === 'vsc') {
       lapTime = circuit.baseLap * (newFlag === 'sc' ? 1.62 : 1.38) + gauss() * 0.3;
     } else {
-      lapTime = circuit.baseLap + carDeficit + driverDeficit + compoundDef.grip + wearPenalty + wPenalty - wetSkillBonus + paceDef.delta + noise + incidentExtra - startBonus + fatiguePenalty;
+      lapTime = circuit.baseLap + carDeficit + driverDeficit + compoundDef.grip + wearPenalty + wPenalty - wetSkillBonus - happinessBonus + paceDef.delta + noise + incidentExtra - startBonus + fatiguePenalty;
     }
     lapTime += pitLoss;
     if (lapTime < circuit.baseLap * 0.6) lapTime = circuit.baseLap * 0.6;
@@ -619,6 +621,27 @@ function buildHistoryPoint(lap, cars, playerCarIds) {
 /* ==================================================================
    PITWALL MANAGER — modo carreira (parte 2/2)
 ================================================================== */
+
+const TRAIT_TEXT = {
+  experience: { hi: 'Muito experiente', lo: 'Ainda ganhando experiência' },
+  carFeel: { hi: 'Ótimo feedback técnico', lo: 'Dificuldade de adaptação ao carro' },
+  wet: { hi: 'Excelente na chuva', lo: 'Sofre em pista molhada' },
+  overtaking: { hi: 'Ótimo em ultrapassagens', lo: 'Tem dificuldade para ultrapassar' },
+  starts: { hi: 'Larga muito bem', lo: 'Largadas inconsistentes' },
+  focus: { hi: 'Extremamente concentrado', lo: 'Perde a concentração sob pressão' },
+  physical: { hi: 'Ótimo preparo físico', lo: 'Cansa no fim das corridas' },
+  pace: { hi: 'Muito rápido', lo: 'Falta ritmo de corrida' },
+};
+function driverTraits(d) {
+  const positives = [], negatives = [];
+  Object.keys(TRAIT_TEXT).forEach(key => {
+    const v = d[key];
+    if (v == null) return;
+    if (v >= 8) positives.push(TRAIT_TEXT[key].hi);
+    else if (v <= 4) negatives.push(TRAIT_TEXT[key].lo);
+  });
+  return { positives, negatives };
+}
 
 function estimateSalary(d) {
   const score = d.pace * 0.5 + d.experience * 0.25 + d.overtaking * 0.25;
@@ -757,11 +780,11 @@ function initCareerState(playerTeamId) {
       driverCodes: team.drivers.map(d => d.code),
     };
     team.drivers.forEach(d => {
-      driverPool[d.code] = { ...d, teamId: team.id, retired: false, salary: estimateSalary(d), contractYears: randInt(1, 3) };
+      driverPool[d.code] = { ...d, teamId: team.id, retired: false, salary: estimateSalary(d), contractYears: randInt(1, 3), happiness: randInt(58, 78), lastTalkRaceSeq: -99 };
     });
   });
   F2_FREE_AGENTS.forEach(d => {
-    driverPool[d.code] = { ...d, teamId: null, role: null, retired: false, salary: estimateSalary(d), contractYears: 0, cooldownUntilRaceSeq: 0 };
+    driverPool[d.code] = { ...d, teamId: null, role: null, retired: false, salary: estimateSalary(d), contractYears: 0, cooldownUntilRaceSeq: 0, happiness: randInt(58, 78), lastTalkRaceSeq: -99 };
   });
   Object.keys(driverPool).forEach(code => { if (driverPool[code].cooldownUntilRaceSeq == null) driverPool[code].cooldownUntilRaceSeq = 0; });
 
@@ -770,7 +793,7 @@ function initCareerState(playerTeamId) {
   Object.keys(teams).forEach(id => { constructorStandings[id] = 0; });
 
   return {
-    year: 2026, playerTeamId, teams, driverPool, driverStandings, constructorStandings,
+    year: 2026, playerTeamId, managerName: null, teams, driverPool, driverStandings, constructorStandings,
     calendar: buildCalendarForYear(2026), roundIndex: 0, seasonHistory: [], raceSequence: 0,
     log: ['Bem-vindo à Pitwall Manager! Temporada 2026 pronta para começar.'],
   };
@@ -876,11 +899,13 @@ function processOffseason(career) {
 
   Object.values(teams).forEach(t => {
     if (!t.devLevels) { const dev = initDevLevels(t.basePace); t.devLevels = dev.devLevels; t.devLevelsStart = dev.devLevelsStart; t.devInvest = dev.devInvest; }
-    UPGRADE_CATEGORIES.forEach(c => {
-      const aiInvestEquivalent = 1.5 + Math.random() * 2.5;
-      const growth = aiInvestEquivalent * DEV_GROWTH_RATE * (1 - t.devLevels[c.id] / 100) + (Math.random() * 3 - 1.6);
-      t.devLevels[c.id] = clamp(t.devLevels[c.id] + growth, 25, 99);
-    });
+    if (t.id !== career.playerTeamId) {
+      UPGRADE_CATEGORIES.forEach(c => {
+        const aiInvestEquivalent = 1.5 + Math.random() * 2.5;
+        const growth = aiInvestEquivalent * DEV_GROWTH_RATE * (1 - t.devLevels[c.id] / 100) + (Math.random() * 3 - 1.6);
+        t.devLevels[c.id] = clamp(t.devLevels[c.id] + growth, 25, 99);
+      });
+    }
     t.engineContractYears = Math.max(0, (t.engineContractYears || 1) - 1);
   });
 
@@ -959,8 +984,6 @@ function processSponsorDealsAfterRace(team, finalCars, playerTeamId) {
   const won = finalCars.some(c => c.teamId === playerTeamId && c.position === 1 && !c.dnf);
   const log = [];
   const deals = (team.sponsorDeals || []).map(d => ({ ...d })).filter(d => {
-    const perRace = d.totalValue / d.raceCount;
-    team.budget += perRace;
     d.racesRemaining -= 1;
     if (won && d.winBonus) {
       team.budget += d.winBonus;
@@ -987,7 +1010,7 @@ const initialState = {
   weather: { condition: 'dry' }, grid: [], lap: 0, totalLaps: 0, flag: 'green', flagLapsRemaining: 0,
   raceWeatherStart: null, preRaceTireChoice: { race1: null, race2: null },
   eventLog: [], prevPositions: {}, autoPlay: false, speed: 1, qualiResult: [], history: [], playerCarIds: [],
-  career: null, careerViewDriverCode: null, careerLastRaceApplied: null, pendingSponsorOffer: null,
+  career: null, careerViewDriverCode: null, careerLastRaceApplied: null, pendingSponsorOffer: null, tutorialPage: 0,
   contractUI: { targetCode: null, salary: 0, years: 1, targetRole: null, lastCounter: null, lastMessage: null },
 };
 
@@ -1001,7 +1024,9 @@ function reducer(state, action) {
       if (typeof SAVED_CAREER === 'undefined' || !SAVED_CAREER) return state;
       return { ...state, mode: 'career', playerTeamId: SAVED_CAREER.playerTeamId, career: SAVED_CAREER.career, phase: 'career-hub' };
     }
-    case 'GOTO': return { ...state, phase: action.phase };
+    case 'TUTORIAL_NAV':
+      return { ...state, tutorialPage: clamp(state.tutorialPage + action.delta, 0, 4) };
+    case 'GOTO': return { ...state, phase: action.phase, tutorialPage: action.phase === 'tutorial' ? 0 : state.tutorialPage };
     case 'RESET': return { ...initialState };
 
     case 'SELECT_MODE':
@@ -1022,12 +1047,24 @@ function reducer(state, action) {
     // ---- carreira ----
     case 'CAREER_SELECT_TEAM': {
       const career = initCareerState(action.teamId);
-      return { ...state, mode: 'career', playerTeamId: action.teamId, career, phase: 'career-hub' };
+      return { ...state, mode: 'career', playerTeamId: action.teamId, career, phase: 'career-name' };
     }
     case 'CAREER_GOTO':
       return { ...state, phase: 'career-' + action.screen, contractUI: { targetCode: null, salary: 0, years: 1, targetRole: null, lastCounter: null, lastMessage: null } };
     case 'CAREER_VIEW_DRIVER':
       return { ...state, careerViewDriverCode: action.code, phase: 'career-profile' };
+    case 'SET_MANAGER_NAME':
+      return { ...state, career: { ...state.career, managerName: (action.name || '').trim().slice(0, 30) || null }, phase: 'career-hub' };
+    case 'TALK_TO_DRIVER': {
+      const career = state.career;
+      const d = career.driverPool[action.code];
+      if (!d) return state;
+      if (d.lastTalkRaceSeq != null && career.raceSequence - d.lastTalkRaceSeq < 1) return state;
+      const boost = randInt(8, 16);
+      const driverPool = { ...career.driverPool, [action.code]: { ...d, happiness: clamp((d.happiness || 65) + boost, 0, 100), lastTalkRaceSeq: career.raceSequence } };
+      const log = [...career.log, `Conversa com ${d.name} melhorou o astral (+${boost} de felicidade).`].slice(-40);
+      return { ...state, career: { ...career, driverPool, log } };
+    }
     case 'CAREER_START_RACE': {
       const circuit = CIRCUITS.find(c => c.id === state.career.calendar[state.career.roundIndex]);
       const teamsList = deriveTeamsListFromCareer(state.career);
@@ -1054,10 +1091,10 @@ function reducer(state, action) {
       const offer = state.pendingSponsorOffer;
       if (!offer) return { ...state, phase: 'career-hub' };
       const team = career.teams[state.playerTeamId];
-      const deal = { sponsorId: offer.sponsorId, totalValue: offer.totalValue, raceCount: offer.raceCount, racesRemaining: offer.raceCount, winBonus: offer.winBonus };
-      const teams = { ...career.teams, [state.playerTeamId]: { ...team, sponsorDeals: [...(team.sponsorDeals || []), deal] } };
+      const deal = { sponsorId: offer.sponsorId, totalValue: offer.totalValue, raceCount: offer.raceCount, racesRemaining: offer.raceCount, winBonus: offer.winBonus, paidUpfront: true };
+      const teams = { ...career.teams, [state.playerTeamId]: { ...team, budget: team.budget + offer.totalValue, sponsorDeals: [...(team.sponsorDeals || []), deal] } };
       const sp = SPONSORS.find(s => s.id === offer.sponsorId);
-      const log = [...career.log, `Novo patrocínio: ${sp ? sp.name : offer.sponsorId} — ${offer.raceCount} corridas, ${fmtMoney(offer.totalValue)}${offer.winBonus ? ` + bônus de ${fmtMoney(offer.winBonus)} por vitória` : ''}.`].slice(-40);
+      const log = [...career.log, `Novo patrocínio: ${sp ? sp.name : offer.sponsorId} — ${fmtMoney(offer.totalValue)} recebidos na hora, contrato de ${offer.raceCount} corridas${offer.winBonus ? ` + bônus de ${fmtMoney(offer.winBonus)} por vitória` : ''}.`].slice(-40);
       return { ...state, career: { ...career, teams, log }, pendingSponsorOffer: null, phase: 'career-hub' };
     }
     case 'DECLINE_SPONSOR_OFFER':
@@ -1178,7 +1215,7 @@ function reducer(state, action) {
       let nextState = {
         ...state, grid: result.finalCars, weather: result.newWeather, flag: result.newFlag,
         flagLapsRemaining: result.newFlagLapsRemaining, prevPositions: result.newPrevPositions, eventLog, lap,
-        autoPlay: finished ? false : (result.pauseWorthy ? false : state.autoPlay),
+        autoPlay: finished ? false : state.autoPlay,
         history: [...state.history, buildHistoryPoint(lap, result.finalCars, state.playerCarIds)].slice(-100),
       };
       if (finished) {
@@ -1210,9 +1247,22 @@ function reducer(state, action) {
             }
           });
           teamClone.budget += racePrize;
+          const driverPool = { ...state.career.driverPool };
+          result.finalCars.forEach(c => {
+            if (c.teamId !== state.playerTeamId) return;
+            const d = driverPool[c.code];
+            if (!d) return;
+            let delta = 0;
+            if (c.dnf) delta = -4;
+            else if (c.position <= 3) delta = 6;
+            else if (c.position <= 6) delta = 3;
+            else if (c.position <= 10) delta = 1;
+            else delta = -2;
+            driverPool[c.code] = { ...d, happiness: clamp((d.happiness == null ? 65 : d.happiness) + delta + (Math.random() * 2 - 1), 0, 100) };
+          });
           const teams = { ...state.career.teams, [state.playerTeamId]: teamClone };
           const log = sponsorResult.log.length ? [...state.career.log, ...sponsorResult.log].slice(-40) : state.career.log;
-          nextState.career = { ...state.career, driverStandings: applied.newDriverStandings, constructorStandings: applied.newConstructorStandings, teams, log, raceSequence: state.career.raceSequence + 1 };
+          nextState.career = { ...state.career, driverStandings: applied.newDriverStandings, constructorStandings: applied.newConstructorStandings, teams, driverPool, log, raceSequence: state.career.raceSequence + 1 };
           nextState.careerLastRaceApplied = { ...applied, salaryPaid: salaryTotal };
           nextState.phase = 'career-race-result';
         } else {
@@ -1270,6 +1320,12 @@ function skillBar(label, value) {
 
 /* ---------------- componentes da corrida ---------------- */
 
+function teamBadge(team, size) {
+  const s = size || 40;
+  const fs = Math.round(s * 0.34);
+  return `<div class="rounded-full flex items-center justify-center shrink-0" style="width:${s}px; height:${s}px; background-color:${team.color}; border: 2px solid ${team.secondary || '#fff'};"><span class="cm-display font-bold" style="color:${team.textOnPrimary || '#000'}; font-size:${fs}px; line-height:1;">${team.short}</span></div>`;
+}
+
 function renderTeamCard(team, actionType) {
   const tier = paceTier(team.carPace);
   const mains = team.drivers.filter(d => d.role === 'race1' || d.role === 'race2');
@@ -1281,7 +1337,7 @@ function renderTeamCard(team, actionType) {
   return `
     <button data-action="${act({ type: actionType, teamId: team.id })}" class="text-left bg-slate-900 border border-slate-800 rounded-lg p-2.5 hover:border-slate-600 active:scale-95 transition-all" style="border-top-color:${team.color}; border-top-width:3px;">
       <div class="flex items-center justify-between mb-1">
-        <span class="cm-display text-xl font-bold text-slate-100 tracking-wide">${team.short}</span>
+        <div class="flex items-center gap-2">${teamBadge(team, 32)}<span class="cm-display text-xl font-bold text-slate-100 tracking-wide">${team.short}</span></div>
         <span class="cm-mono text-xs text-slate-500">${team.engine || ''}</span>
       </div>
       <div class="cm-body text-sm text-slate-300 mb-1">${team.name}</div>
@@ -1422,6 +1478,70 @@ function renderPlaybackBar(autoPlay, speed, lap) {
 
 /* ---------------- menu / modo / corrida rápida ---------------- */
 
+function renderTutorialScreen(state) {
+  const page = state.tutorialPage || 0;
+  const pages = [
+    {
+      title: '🏎️ Bem-vindo ao Pitwall Manager',
+      body: 'Você é o chefe de uma equipe de F1 até 2040. Cada corrida você toma decisões de pneu e ritmo; fora da pista, cuida de contratos, upgrades e patrocínios. Vamos por partes.',
+      visual: '',
+    },
+    {
+      title: '🛞 Pneus',
+      body: 'Antes de cada corrida você escolhe o composto de largada. Macio é rápido mas gasta rápido (16-18 voltas); duro dura mais (33-38) mas é mais lento. Se passar do limite de desgaste, o pneu pode estourar — fique de olho na barra.',
+      visual: `<div class="flex items-center gap-2 justify-center mt-3">${compoundDot('soft')}${wearBar('soft', 20, 'w-16')}<span class="cm-mono text-xs text-slate-500 ml-2">S</span>${compoundDot('hard')}${wearBar('hard', 70, 'w-16')}<span class="cm-mono text-xs text-slate-500 ml-2">D</span></div>`,
+    },
+    {
+      title: '⏱️ Ritmo e pit stops',
+      body: 'Durante a corrida, escolha Ataque (mais rápido, gasta mais pneu), Equilíbrio, ou Poupar. Toque em "BOX" pra chamar seu piloto e trocar o composto. A corrida roda sozinha depois que você aperta "Iniciar" — só pausa quando você quiser.',
+      visual: `<div class="grid grid-cols-3 gap-1.5 mt-3 max-w-xs mx-auto"><div class="cm-body text-xs py-1.5 rounded border bg-amber-500 border-amber-400 text-slate-950 font-semibold text-center">Ataque</div><div class="cm-body text-xs py-1.5 rounded border bg-slate-800 border-slate-700 text-slate-300 text-center">Equilíbrio</div><div class="cm-body text-xs py-1.5 rounded border bg-slate-800 border-slate-700 text-slate-300 text-center">Poupar</div></div>`,
+    },
+    {
+      title: '📋 Gerenciando a equipe',
+      body: 'No painel, você negocia contratos (pilotos só topam conversar se estiverem interessados), investe por corrida em 6 áreas do carro, e aceita propostas de patrocínio que aparecem sozinhas depois das corridas — o dinheiro cai na hora.',
+      visual: '',
+    },
+    {
+      title: '🏁 Pronto pra começar?',
+      body: 'Escolha uma equipe, dê um nome pra você como chefe, e comece sua primeira temporada. Boa sorte!',
+      visual: '',
+    },
+  ];
+  const p = pages[page];
+  const dots = pages.map((_, i) => `<span class="w-1.5 h-1.5 rounded-full ${i === page ? 'bg-amber-400' : 'bg-slate-700'}"></span>`).join('');
+  return `
+    <div class="h-full flex flex-col p-6">
+      <div class="flex-1 flex flex-col items-center justify-center text-center">
+        <div class="cm-display text-2xl font-bold text-slate-100 mb-3">${p.title}</div>
+        <p class="cm-body text-sm text-slate-400 max-w-xs">${p.body}</p>
+        ${p.visual}
+      </div>
+      <div class="shrink-0">
+        <div class="flex items-center justify-center gap-1.5 mb-4">${dots}</div>
+        <div class="flex gap-2">
+          ${page > 0 ? `<button data-action="${act({ type: 'TUTORIAL_NAV', delta: -1 })}" class="flex-1 bg-slate-800 border border-slate-700 rounded-md py-3 cm-body text-sm text-slate-300">← Voltar</button>` : `<button data-action="${act({ type: 'GOTO', phase: 'mode' })}" class="flex-1 bg-slate-800 border border-slate-700 rounded-md py-3 cm-body text-sm text-slate-300">Sair</button>`}
+          ${page < pages.length - 1
+            ? `<button data-action="${act({ type: 'TUTORIAL_NAV', delta: 1 })}" class="flex-1 bg-amber-500 text-slate-950 rounded-md py-3 cm-body text-sm font-semibold">Próximo →</button>`
+            : `<button data-action="${act({ type: 'GOTO', phase: 'career-team' })}" class="flex-1 bg-amber-500 text-slate-950 rounded-md py-3 cm-body text-sm font-semibold">Escolher equipe →</button>`}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCareerNameScreen(state) {
+  const team = TEAMS.find(t => t.id === state.playerTeamId);
+  return `
+    <div class="h-full flex flex-col items-center justify-center p-6 text-center">
+      ${team ? teamBadge(team, 56) : ''}
+      <div class="cm-display text-2xl font-bold text-slate-100 mt-4 mb-1">Qual é o seu nome, chefe de equipe?</div>
+      <p class="cm-body text-sm text-slate-400 max-w-xs mb-6">Você vai comandar a ${team ? team.name : 'equipe'} a partir de agora.</p>
+      <input type="text" id="manager-name-input" maxlength="30" placeholder="Seu nome" class="cm-body text-lg text-center bg-slate-900 border border-slate-700 rounded-md px-4 py-3 w-full max-w-xs mb-4 text-slate-100" autocomplete="off">
+      <button data-name-confirm="1" class="w-full max-w-xs bg-amber-500 text-slate-950 cm-body font-semibold py-3 rounded-md">Confirmar</button>
+    </div>
+  `;
+}
+
 function renderMenuScreen() {
   const save = (typeof SAVED_CAREER !== 'undefined') ? SAVED_CAREER : null;
   const team = save && save.career.teams[save.playerTeamId];
@@ -1446,13 +1566,13 @@ function renderModeScreen() {
   return `
     <div class="h-full overflow-y-auto p-4 flex flex-col justify-center">
       <div class="cm-mono text-xs text-slate-500 mb-3 text-center">ESCOLHA O MODO DE JOGO</div>
-      <button data-action="${act({ type: 'SELECT_MODE', mode: 'quick' })}" class="text-left bg-slate-900 border border-slate-800 rounded-lg p-4 mb-3 hover:border-amber-500">
-        <div class="cm-display text-xl font-bold text-slate-100 mb-1">🏁 Corrida Rápida</div>
-        <div class="cm-body text-sm text-slate-400">Escolha uma equipe, um circuito, e dispute uma corrida só — resultado imediato.</div>
-      </button>
-      <button data-action="${act({ type: 'SELECT_MODE', mode: 'career' })}" class="text-left bg-slate-900 border border-slate-800 rounded-lg p-4 hover:border-cyan-500">
+      <button data-action="${act({ type: 'GOTO', phase: 'career-team' })}" class="text-left bg-slate-900 border border-slate-800 rounded-lg p-4 mb-3 hover:border-cyan-500">
         <div class="cm-display text-xl font-bold text-slate-100 mb-1">📋 Modo Carreira</div>
         <div class="cm-body text-sm text-slate-400">Temporada completa (22 corridas), contratos com pilotos e motor, patrocínios, upgrades no carro, e mercado de transferências — de 2026 até 2040.</div>
+      </button>
+      <button data-action="${act({ type: 'GOTO', phase: 'tutorial' })}" class="text-left bg-slate-900 border border-slate-800 rounded-lg p-4 hover:border-amber-500">
+        <div class="cm-display text-xl font-bold text-slate-100 mb-1">🎓 Tutorial</div>
+        <div class="cm-body text-sm text-slate-400">Aprenda a jogar: pneus, ritmo, pit stops, contratos e upgrades — antes de assumir uma equipe de verdade.</div>
       </button>
     </div>
   `;
@@ -1466,7 +1586,7 @@ function renderTeamSelectScreen() {
         <h2 class="cm-display text-2xl font-bold mb-1">Escolha sua equipe</h2>
         <p class="cm-body text-xs text-slate-500 mb-3">Ratings de ritmo são estimativas de jogo — a ordem real de pista ainda é uma incógnita.</p>
       </div>
-      <div class="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 content-start pb-2">${TEAMS.map(t => renderTeamCard(t, 'SELECT_TEAM')).join('')}</div>
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 content-start pb-2">${TEAMS.map(t => renderTeamCard(t, 'SELECT_TEAM')).join('')}</div>
     </div>
   `;
 }
@@ -1483,7 +1603,7 @@ function renderCircuitSelectScreen(state) {
   return `
     <div class="h-full flex flex-col p-3 sm:p-4 overflow-hidden">
       <div class="shrink-0"><div class="cm-mono text-xs text-slate-500 mb-1">ETAPA 2 DE 3 · ${team ? team.short : ''}</div><h2 class="cm-display text-2xl font-bold mb-3">Escolha o circuito</h2></div>
-      <div class="flex-1 min-h-0 overflow-y-auto space-y-2 pb-2">${rows}</div>
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto space-y-2 pb-2">${rows}</div>
       <button data-action="${act({ type: 'RESET' })}" class="shrink-0 w-full mt-2 text-slate-400 cm-body text-sm py-1.5">← Trocar de equipe</button>
     </div>
   `;
@@ -1524,7 +1644,7 @@ function renderQualiScreen(state) {
         <h2 class="cm-display text-2xl font-bold mb-1">Grid de largada</h2>
         <div class="cm-mono text-xs ${wet ? 'text-cyan-300' : 'text-amber-300'} mb-3">${wet ? '🌧 previsão de chuva na largada' : '☀️ previsão de pista seca'}</div>
       </div>
-      <div class="flex-1 min-h-0 overflow-y-auto">
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto">
         <div class="bg-slate-900 border border-slate-800 rounded-md mb-3">${rows}</div>
         ${tirePicker}
       </div>
@@ -1603,7 +1723,7 @@ function renderResultsScreen(state) {
         <div class="cm-body text-xs text-slate-300 mb-1">Pontos do time: <span class="text-amber-400 font-semibold">${teamPoints}</span></div>
         ${fastestCar ? `<div class="cm-body text-xs text-cyan-300 mb-2">⚡ Volta mais rápida: ${fastestCar.name} — ${fmtLapTime(fastestCar.bestLap)}</div>` : ''}
       </div>
-      <div class="flex-1 min-h-0 overflow-y-auto bg-slate-900 border border-slate-800 rounded-md">${classificationRows(classified)}</div>
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto bg-slate-900 border border-slate-800 rounded-md">${classificationRows(classified)}</div>
       <div class="shrink-0 pt-2">
         <button data-action="${act({ type: 'BACK_TO_CIRCUIT' })}" class="w-full bg-amber-500 text-slate-950 cm-body font-semibold py-2.5 rounded-md mb-1.5">Nova corrida com ${team ? team.short : ''}</button>
         <button data-action="${act({ type: 'RESET' })}" class="w-full text-slate-400 cm-body text-sm py-1">← Menu principal</button>
@@ -1622,7 +1742,7 @@ function renderCareerTeamSelectScreen() {
         <h2 class="cm-display text-2xl font-bold mb-1">Escolha sua equipe</h2>
         <p class="cm-body text-xs text-slate-500 mb-3">Contratos, patrocínios, upgrades e o mercado de pilotos ao longo de 15 temporadas.</p>
       </div>
-      <div class="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 content-start pb-2">${TEAMS.map(t => renderTeamCard(t, 'CAREER_SELECT_TEAM')).join('')}</div>
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 content-start pb-2">${TEAMS.map(t => renderTeamCard(t, 'CAREER_SELECT_TEAM')).join('')}</div>
     </div>
   `;
 }
@@ -1632,7 +1752,7 @@ function careerHeader(state, title) {
   const team = career.teams[state.playerTeamId];
   return `
     <div class="shrink-0 safe-top bg-slate-950 border-b border-slate-800 px-3 py-2 flex items-center justify-between">
-      <button data-action="${act({ type: 'CAREER_GOTO', screen: 'hub' })}" class="cm-mono text-xs text-slate-400">← ${team.short} · ${career.year}</button>
+      <button data-action="${act({ type: 'CAREER_GOTO', screen: 'hub' })}" class="cm-mono text-xs text-slate-400 flex items-center gap-1.5">${teamBadge(team, 22)}${team.short} · ${career.year}</button>
       <span class="cm-display text-sm font-semibold text-slate-100">${title}</span>
       <span class="cm-mono text-xs text-amber-400">${fmtMoney(team.budget)}</span>
     </div>
@@ -1663,7 +1783,8 @@ function renderCareerHubScreen(state) {
   return `
     <div class="h-full flex flex-col overflow-hidden">
       ${careerHeader(state, 'Painel da Equipe')}
-      <div class="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4">
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4">
+        ${career.managerName ? `<div class="cm-body text-xs text-slate-500 mb-2">Chefe de equipe: <span class="text-slate-300 font-semibold">${career.managerName}</span></div>` : ''}
         <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 mb-3" style="border-top-color:${team.color}; border-top-width:3px;">
           <div class="cm-mono text-xs text-slate-500 mb-1">PRÓXIMA CORRIDA — RODADA ${career.roundIndex + 1}/${career.calendar.length}</div>
           <div class="cm-display text-xl font-bold text-slate-100 mb-2">${CIRCUIT_FLAGS[nextCircuit.id]} ${nextCircuit.name}</div>
@@ -1694,7 +1815,7 @@ function renderCareerCalendarScreen(state) {
       </div>
     `;
   }).join('');
-  return `<div class="h-full flex flex-col overflow-hidden">${careerHeader(state, 'Calendário')}<div class="flex-1 min-h-0 overflow-y-auto bg-slate-900 m-3 rounded-md border border-slate-800">${rows}</div></div>`;
+  return `<div class="h-full flex flex-col overflow-hidden">${careerHeader(state, 'Calendário')}<div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto bg-slate-900 m-3 rounded-md border border-slate-800">${rows}</div></div>`;
 }
 
 function renderCareerStandingsScreen(state) {
@@ -1728,7 +1849,7 @@ function renderCareerStandingsScreen(state) {
   return `
     <div class="h-full flex flex-col overflow-hidden">
       ${careerHeader(state, 'Classificação ' + career.year)}
-      <div class="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
         <div><div class="cm-mono text-xs text-slate-500 mb-1">PILOTOS</div><div class="bg-slate-900 border border-slate-800 rounded-md overflow-hidden">${driverRows}</div></div>
         <div><div class="cm-mono text-xs text-slate-500 mb-1">CONSTRUTORES</div><div class="bg-slate-900 border border-slate-800 rounded-md overflow-hidden">${constructorRows}</div></div>
       </div>
@@ -1800,7 +1921,7 @@ function renderCareerContractsScreen(state) {
   return `
     <div class="h-full flex flex-col overflow-hidden">
       ${careerHeader(state, 'Contratos')}
-      <div class="flex-1 min-h-0 overflow-y-auto p-3">
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">
         <div class="flex items-center justify-between mb-1">
           <div class="cm-mono text-xs text-slate-500">SEU ELENCO</div>
           <button data-action="${act({ type: 'CAREER_GOTO', screen: 'market' })}" class="cm-mono text-xs text-cyan-400">🔄 ver mercado de transferências →</button>
@@ -1842,7 +1963,7 @@ function renderCareerMarketScreen(state) {
   return `
     <div class="h-full flex flex-col overflow-hidden">
       ${careerHeader(state, 'Mercado de Transferências')}
-      <div class="flex-1 min-h-0 overflow-y-auto p-3">
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">
         <p class="cm-body text-xs text-slate-500 mb-3">Você pode sondar qualquer piloto do grid — mas ele só topa conversar se estiver interessado. Pilotos com contrato longo raramente têm interesse. Se recusar, espere a corrida seguinte para tentar de novo.</p>
         <div class="cm-mono text-xs text-emerald-400 mb-1">AGENTES LIVRES (${free.length})</div>
         ${free.length ? free.map(negotiableCard).join('') : '<div class="cm-body text-xs text-slate-600 mb-2">Nenhum agente livre no momento.</div>'}
@@ -1888,7 +2009,7 @@ function renderCareerUpgradesScreen(state) {
   return `
     <div class="h-full flex flex-col overflow-hidden">
       ${careerHeader(state, 'Upgrades')}
-      <div class="flex-1 min-h-0 overflow-y-auto p-3">
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">
         <p class="cm-body text-xs text-slate-500 mb-3">Quanto mais você investe por corrida em cada área, mais rápido ela evolui — com retorno decrescente perto de 100%. O valor é descontado do orçamento a cada corrida, esteja você jogando ou não.</p>
         ${rows}
         <div class="cm-body text-xs text-slate-300 mt-2">Total investido por corrida: <span class="text-amber-400 font-semibold">${fmtMoney(totalSpend)}</span> · Orçamento: <span class="text-amber-400">${fmtMoney(team.budget)}</span></div>
@@ -1903,22 +2024,21 @@ function renderCareerSponsorsScreen(state) {
   const deals = team.sponsorDeals || [];
   const dealsHtml = deals.length ? deals.map(d => {
     const s = SPONSORS.find(sp => sp.id === d.sponsorId);
-    const perRace = d.totalValue / d.raceCount;
     return `
       <div class="bg-slate-900 border border-slate-800 rounded-md p-3 mb-2">
         <div class="flex items-center justify-between mb-1">
           <span class="cm-display font-semibold text-slate-100">${s ? s.name : d.sponsorId}</span>
           <span class="cm-mono text-xs text-slate-500">${s ? s.tier : ''}</span>
         </div>
-        <div class="cm-body text-xs text-slate-400">${d.racesRemaining} de ${d.raceCount} corridas restantes · ${fmtMoney(perRace)}/corrida</div>
-        ${d.winBonus ? `<div class="cm-body text-xs text-emerald-400 mt-1">🏆 bônus de ${fmtMoney(d.winBonus)} por vitória</div>` : ''}
+        <div class="cm-body text-xs text-slate-400">${fmtMoney(d.totalValue)} recebidos • ${d.racesRemaining} de ${d.raceCount} corridas de contrato restantes</div>
+        ${d.winBonus ? `<div class="cm-body text-xs text-emerald-400 mt-1">🏆 bônus de ${fmtMoney(d.winBonus)} por vitória (enquanto o contrato durar)</div>` : ''}
       </div>
     `;
   }).join('') : '<div class="cm-body text-xs text-slate-500">Nenhum patrocínio ativo ainda. Propostas aparecem automaticamente ao longo da temporada, após as corridas.</div>';
   return `
     <div class="h-full flex flex-col overflow-hidden">
       ${careerHeader(state, 'Patrocínios')}
-      <div class="flex-1 min-h-0 overflow-y-auto p-3">
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">
         <p class="cm-body text-xs text-slate-500 mb-3">Você não escolhe os patrocinadores — as propostas chegam sozinhas durante a temporada e, uma vez assinadas, valem até o fim do contrato.</p>
         <div class="cm-mono text-xs text-slate-500 mb-1">CONTRATOS ATIVOS (${deals.length})</div>
         ${dealsHtml}
@@ -1931,19 +2051,18 @@ function renderCareerSponsorOfferScreen(state) {
   const offer = state.pendingSponsorOffer;
   if (!offer) return renderCareerHubScreen(state);
   const s = SPONSORS.find(sp => sp.id === offer.sponsorId);
-  const perRace = offer.totalValue / offer.raceCount;
   return `
     <div class="h-full flex flex-col items-center justify-center p-6 text-center">
       <div class="cm-mono text-xs text-cyan-400 mb-2">PROPOSTA DE PATROCÍNIO</div>
       <div class="cm-display text-3xl font-bold text-slate-100 mb-1">${s ? s.name : offer.sponsorId}</div>
       <div class="cm-mono text-xs text-slate-500 mb-6">${s ? s.tier + ' · ' + s.category : ''}</div>
       <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 mb-6 w-full max-w-xs">
-        <div class="cm-display text-2xl font-bold text-amber-400">${offer.raceCount} corridas</div>
-        <div class="cm-mono text-lg text-slate-100">${fmtMoney(offer.totalValue)}</div>
-        <div class="cm-body text-xs text-slate-500 mb-2">≈ ${fmtMoney(perRace)} por corrida</div>
-        ${offer.winBonus ? `<div class="cm-body text-sm text-emerald-400 mt-2 pt-2 border-t border-slate-800">🏆 + ${fmtMoney(offer.winBonus)} de bônus por vitória</div>` : '<div class="cm-body text-xs text-slate-600 mt-2 pt-2 border-t border-slate-800">sem cláusula de bônus por vitória</div>'}
+        <div class="cm-mono text-3xl text-slate-100 font-bold">${fmtMoney(offer.totalValue)}</div>
+        <div class="cm-body text-xs text-slate-500 mb-2">recebido à vista, na hora</div>
+        <div class="cm-display text-lg font-bold text-amber-400">${offer.raceCount} corridas de contrato</div>
+        ${offer.winBonus ? `<div class="cm-body text-sm text-emerald-400 mt-2 pt-2 border-t border-slate-800">🏆 + ${fmtMoney(offer.winBonus)} de bônus por vitória (enquanto durar)</div>` : '<div class="cm-body text-xs text-slate-600 mt-2 pt-2 border-t border-slate-800">sem cláusula de bônus por vitória</div>'}
       </div>
-      <p class="cm-body text-xs text-slate-500 max-w-xs mb-6">Depois de assinado, o contrato não pode ser cancelado até o fim das ${offer.raceCount} corridas.</p>
+      <p class="cm-body text-xs text-slate-500 max-w-xs mb-6">O valor cai no caixa assim que você assina. O contrato não pode ser cancelado até o fim das ${offer.raceCount} corridas.</p>
       <div class="flex gap-2 w-full max-w-xs">
         <button data-action="${act({ type: 'DECLINE_SPONSOR_OFFER' })}" class="flex-1 bg-slate-800 border border-slate-700 rounded-md py-3 cm-body text-sm text-slate-300">Recusar</button>
         <button data-action="${act({ type: 'ACCEPT_SPONSOR_OFFER' })}" class="flex-1 bg-amber-500 text-slate-950 rounded-md py-3 cm-body text-sm font-semibold">Assinar</button>
@@ -1964,7 +2083,7 @@ function renderCareerRosterScreen(state) {
       </button>
     `;
   }).join('');
-  return `<div class="h-full flex flex-col overflow-hidden">${careerHeader(state, 'Elenco')}<div class="flex-1 min-h-0 overflow-y-auto p-3">${rows}</div></div>`;
+  return `<div class="h-full flex flex-col overflow-hidden">${careerHeader(state, 'Elenco')}<div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">${rows}</div></div>`;
 }
 
 function renderCareerProfileScreen(state) {
@@ -1973,15 +2092,46 @@ function renderCareerProfileScreen(state) {
   const d = career.driverPool[code];
   if (!d) return `<div class="h-full flex items-center justify-center cm-body text-slate-500">Piloto não encontrado.</div>`;
   const team = d.teamId ? career.teams[d.teamId] : null;
+  const isMine = d.teamId === state.playerTeamId && (d.role === 'race1' || d.role === 'race2');
+  const happiness = d.happiness != null ? d.happiness : 65;
+  const hTone = happiness >= 70 ? '#3ECF6E' : happiness >= 40 ? '#FFB020' : '#E8383D';
+  const hLabel = happiness >= 80 ? 'Radiante' : happiness >= 60 ? 'Contente' : happiness >= 40 ? 'Neutro' : happiness >= 20 ? 'Insatisfeito' : 'Muito infeliz';
+  const traits = driverTraits(d);
+  const onCooldown = isMine && d.lastTalkRaceSeq != null && career.raceSequence - d.lastTalkRaceSeq < 1;
   return `
     <div class="h-full flex flex-col overflow-hidden">
       ${careerHeader(state, 'Perfil do piloto')}
-      <div class="flex-1 min-h-0 overflow-y-auto p-4">
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-4">
         <div class="flex items-center gap-2 mb-1">
           ${team ? `<span class="w-2.5 h-2.5 rounded-full" style="background-color:${team.color}"></span>` : ''}
           <span class="cm-display text-2xl font-bold text-slate-100">${d.name}</span>
         </div>
         <div class="cm-mono text-xs text-slate-500 mb-4">${d.age} anos · ${team ? team.name : 'sem equipe'} · ${roleLabel(d.role)}${d.retired ? ' · APOSENTADO' : ''}</div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-md p-3 mb-4">
+          <div class="flex items-center justify-between mb-1">
+            <span class="cm-body text-sm text-slate-300">😊 Felicidade</span>
+            <span class="cm-mono text-sm" style="color:${hTone}">${hLabel}</span>
+          </div>
+          <div class="h-2 rounded-full bg-slate-800 overflow-hidden mb-2">
+            <div class="h-full rounded-full" style="width:${happiness}%; background-color:${hTone}"></div>
+          </div>
+          ${isMine ? `<button data-talk-code="${d.code}" ${onCooldown ? 'disabled' : ''} class="w-full ${onCooldown ? 'bg-slate-900 border border-slate-800 text-slate-600' : 'bg-slate-800 border border-slate-700 text-slate-200'} rounded-md py-2 cm-body text-sm">${onCooldown ? 'Já conversaram essa corrida' : '💬 Conversar com o piloto'}</button>` : ''}
+        </div>
+
+        ${(traits.positives.length || traits.negatives.length) ? `
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+          <div class="bg-slate-900 border border-emerald-900 rounded-md p-3">
+            <div class="cm-mono text-xs text-emerald-400 mb-1.5">PONTOS FORTES</div>
+            ${traits.positives.length ? traits.positives.map(t => `<div class="cm-body text-xs text-slate-300 mb-1">✓ ${t}</div>`).join('') : '<div class="cm-body text-xs text-slate-600">Nada de excepcional ainda.</div>'}
+          </div>
+          <div class="bg-slate-900 border border-red-900 rounded-md p-3">
+            <div class="cm-mono text-xs text-red-400 mb-1.5">PONTOS FRACOS</div>
+            ${traits.negatives.length ? traits.negatives.map(t => `<div class="cm-body text-xs text-slate-300 mb-1">✗ ${t}</div>`).join('') : '<div class="cm-body text-xs text-slate-600">Nenhuma fraqueza notável.</div>'}
+          </div>
+        </div>` : ''}
+
+        <div class="cm-mono text-xs text-slate-500 mb-1">HABILIDADES</div>
         ${skillBar('Experiência', d.experience)}${skillBar('Acerto com o carro', d.carFeel)}${skillBar('Chuva', d.wet)}
         ${skillBar('Ultrapassagem', d.overtaking)}${skillBar('Largada', d.starts)}${skillBar('Concentração', d.focus)}
         ${skillBar('Físico', d.physical)}${skillBar('Rapidez', d.pace)}
@@ -2003,7 +2153,7 @@ function renderCareerOffseasonScreen(state) {
         <div class="cm-mono text-xs text-cyan-400">FIM DA TEMPORADA ${lastSeason ? lastSeason.year : career.year - 1}</div>
         <div class="cm-display text-2xl font-bold text-slate-100">Mercado de pilotos</div>
       </div>
-      <div class="flex-1 min-h-0 overflow-y-auto p-3">
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">
         ${champ ? `<div class="bg-slate-900 border border-amber-700 rounded-md p-3 mb-2"><div class="cm-mono text-xs text-amber-400">CAMPEÃO DE PILOTOS</div><div class="cm-display text-lg font-bold text-slate-100">🏆 ${champ.name} — ${lastSeason.driverChampionPoints} pts</div></div>` : ''}
         ${constructorChamp ? `<div class="bg-slate-900 border border-slate-800 rounded-md p-3 mb-3"><div class="cm-mono text-xs text-slate-500">CAMPEÃ DE CONSTRUTORES</div><div class="cm-display text-lg font-bold text-slate-100">🏆 ${constructorChamp.name}</div></div>` : ''}
         <div class="cm-mono text-xs text-slate-500 mb-1">NOTÍCIAS DA ENTRESSAFRA</div>
@@ -2033,7 +2183,7 @@ function renderCareerRaceResultScreen(state) {
         <div class="cm-body text-xs text-slate-300 mb-1">Pontos nesta corrida: <span class="text-amber-400 font-semibold">${teamPoints}</span> · Posição atual (construtores): <span class="text-cyan-300 font-semibold">P${myConstructorPos || '-'}</span></div>
         ${fastestCar ? `<div class="cm-body text-xs text-cyan-300 mb-2">⚡ Volta mais rápida: ${fastestCar.name} — ${fmtLapTime(fastestCar.bestLap)}</div>` : ''}
       </div>
-      <div class="flex-1 min-h-0 overflow-y-auto bg-slate-900 border border-slate-800 rounded-md">${classificationRows(classified)}</div>
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto bg-slate-900 border border-slate-800 rounded-md">${classificationRows(classified)}</div>
       <div class="shrink-0 pt-2">
         <button data-action="${act({ type: 'CAREER_CONTINUE' })}" class="w-full bg-amber-500 text-slate-950 cm-body font-semibold py-2.5 rounded-md">${isLastRound ? 'Encerrar temporada →' : 'Continuar →'}</button>
       </div>
@@ -2047,6 +2197,8 @@ function renderApp(state) {
   const p = state.phase;
   if (p === 'menu') return renderMenuScreen();
   if (p === 'mode') return renderModeScreen();
+  if (p === 'tutorial') return renderTutorialScreen(state);
+  if (p === 'career-name') return renderCareerNameScreen(state);
   if (p === 'team') return renderTeamSelectScreen();
   if (p === 'circuit') return renderCircuitSelectScreen(state);
   if (p === 'quali') return renderQualiScreen(state);
@@ -2100,7 +2252,10 @@ function repairLoadedCareer(career) {
     if (typeof d.cooldownUntilRaceSeq !== 'number') d.cooldownUntilRaceSeq = 0;
     if (typeof d.salary !== 'number') d.salary = estimateSalary(d);
     if (typeof d.contractYears !== 'number') d.contractYears = 2;
+    if (typeof d.happiness !== 'number') d.happiness = 65;
+    if (typeof d.lastTalkRaceSeq !== 'number') d.lastTalkRaceSeq = -99;
   });
+  if (typeof career.managerName === 'undefined') career.managerName = null;
   if (!Array.isArray(career.calendar) || !career.calendar.length) career.calendar = buildCalendarForYear(career.year || 2026);
   if (typeof career.roundIndex !== 'number' || career.roundIndex < 0 || career.roundIndex >= career.calendar.length) career.roundIndex = 0;
   if (typeof career.raceSequence !== 'number') career.raceSequence = 0;
@@ -2184,6 +2339,8 @@ function render() {
   const gapOpen = gapDetailsEl ? gapDetailsEl.open : false;
   const eventDetailsEl = document.getElementById('event-details');
   const eventOpen = eventDetailsEl ? eventDetailsEl.open : false;
+  const screenEl = document.getElementById('screen-scroll');
+  const screenScroll = screenEl ? screenEl.scrollTop : null;
 
   root.innerHTML = renderApp(state);
 
@@ -2195,15 +2352,35 @@ function render() {
   if (newGapDetailsEl) newGapDetailsEl.open = gapOpen;
   const newEventDetailsEl = document.getElementById('event-details');
   if (newEventDetailsEl) newEventDetailsEl.open = eventOpen;
+  const newScreenEl = document.getElementById('screen-scroll');
+  if (newScreenEl && screenScroll != null) newScreenEl.scrollTop = screenScroll;
 
   scheduleAutoplay();
 }
 
 document.getElementById('root').addEventListener('click', (e) => {
+  const nameBtn = e.target.closest('[data-name-confirm]');
+  if (nameBtn) {
+    const input = document.getElementById('manager-name-input');
+    dispatch({ type: 'SET_MANAGER_NAME', name: input ? input.value : '' });
+    return;
+  }
+  const talkBtn = e.target.closest('[data-talk-code]');
+  if (talkBtn) {
+    dispatch({ type: 'TALK_TO_DRIVER', code: talkBtn.getAttribute('data-talk-code') });
+    return;
+  }
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
   const action = JSON.parse(btn.getAttribute('data-action'));
   dispatch(action);
+});
+
+document.getElementById('root').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  if (e.target && e.target.id === 'manager-name-input') {
+    dispatch({ type: 'SET_MANAGER_NAME', name: e.target.value });
+  }
 });
 
 document.getElementById('root').addEventListener('change', (e) => {

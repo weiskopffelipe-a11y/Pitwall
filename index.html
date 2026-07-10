@@ -11,8 +11,16 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
-  html, body { height: 100%; margin: 0; background: #020617; overflow: hidden; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
-  #root { height: 100vh; overflow: hidden; }
+  :root {
+    --tp: #FFB020;
+    --ts: #4FD1E8;
+    --ttext: #0B0E14;
+    --bg950: #020617;
+    --bg900: #0f172a;
+    --bg800: #1e293b;
+  }
+  html, body { height: 100%; margin: 0; background: var(--bg950); overflow: hidden; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
+  #root { height: 100vh; overflow: hidden; transition: background-color .5s ease; }
   @supports (height: 100dvh) { #root { height: 100dvh; } }
   .cm-display { font-family: 'Rajdhani', sans-serif; }
   .cm-mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
@@ -25,6 +33,25 @@
   .cm-live-dot { animation: cm-pulse 1.4s ease-in-out infinite; }
   details > summary { list-style: revert; }
   details > summary::-webkit-details-marker { color: #64748b; }
+
+  /* --- team theming: recolors the app's dark panels and amber/cyan accents to the selected team's livery --- */
+  @supports (color: color-mix(in srgb, red, blue)) {
+    :root {
+      --bg950: color-mix(in srgb, var(--tp) 10%, #020617);
+      --bg900: color-mix(in srgb, var(--tp) 9%, #0f172a);
+      --bg800: color-mix(in srgb, var(--tp) 8%, #1e293b);
+    }
+  }
+  body, .bg-slate-950 { background-color: var(--bg950) !important; }
+  .bg-slate-900 { background-color: var(--bg900) !important; }
+  .bg-slate-800 { background-color: var(--bg800) !important; }
+  .bg-amber-500 { background-color: var(--tp) !important; }
+  .text-amber-400, .text-amber-300 { color: var(--tp) !important; }
+  .border-amber-400, .border-amber-500 { border-color: var(--tp) !important; }
+  .text-slate-950 { color: var(--ttext) !important; }
+  .text-cyan-300, .text-cyan-400 { color: var(--ts) !important; }
+  .border-cyan-400, .border-cyan-500 { border-color: var(--ts) !important; }
+  .team-accent-bar { background: linear-gradient(90deg, var(--tp), var(--ts)); }
 </style>
 </head>
 <body class="cm-body">
@@ -38,67 +65,67 @@ const NAME_POOL_FIRST = ['Lucas','Mateus','Théo','Enzo','Diego','Mikkel','Olive
 const NAME_POOL_LAST = ['Silva','Bianchi','Moreau','Larsson','Weber','Costa','Rossi','Fernández','Novak','Andersson','Tanaka','Mercer','Duval','Reyes','Petrov','Nakamura','Sørensen','Álvarez','Keller','Brandt','Okafor','Lindgren','Marchetti','Souza','Haddad','Kowalski','Doyle','Vasquez','Ferreira','Kimura'];
 
 const TEAMS = [
-  { id: 'mcl', name: 'McLaren', short: 'MCL', color: '#FF8000', engine: 'Mercedes', carPace: 95, reliability: 92,
+  { id: 'mcl', name: 'McLaren', short: 'MCL', color: '#FF8000', secondary: '#FFFFFF', textOnPrimary: '#0B0E14', engine: 'Mercedes', carPace: 95, reliability: 92,
     drivers: [
       { code: 'NOR', name: 'Lando Norris', age: 26, role: 'race1', experience: 7, carFeel: 9, wet: 7, overtaking: 8, starts: 7, focus: 8, physical: 8, pace: 9 },
       { code: 'PIA', name: 'Oscar Piastri', age: 25, role: 'race2', experience: 5, carFeel: 8, wet: 7, overtaking: 8, starts: 7, focus: 9, physical: 8, pace: 9 },
       { code: 'FOR', name: 'Leonardo Fornaroli', age: 23, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 7, physical: 7, pace: 7 },
     ] },
-  { id: 'fer', name: 'Ferrari', short: 'FER', color: '#E8002D', engine: 'Ferrari', carPace: 93, reliability: 88,
+  { id: 'fer', name: 'Ferrari', short: 'FER', color: '#E8002D', secondary: '#FFD500', textOnPrimary: '#FFFFFF', engine: 'Ferrari', carPace: 93, reliability: 88,
     drivers: [
       { code: 'LEC', name: 'Charles Leclerc', age: 28, role: 'race1', experience: 8, carFeel: 8, wet: 7, overtaking: 8, starts: 8, focus: 7, physical: 8, pace: 9 },
       { code: 'HAM', name: 'Lewis Hamilton', age: 41, role: 'race2', experience: 10, carFeel: 9, wet: 10, overtaking: 9, starts: 8, focus: 9, physical: 7, pace: 8 },
       { code: 'GIO', name: 'Antonio Giovinazzi', age: 32, role: 'reserve', experience: 6, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 7, physical: 6, pace: 6 },
     ] },
-  { id: 'rbr', name: 'Red Bull Racing', short: 'RBR', color: '#3671C6', engine: 'Red Bull Ford', carPace: 92, reliability: 87,
+  { id: 'rbr', name: 'Red Bull Racing', short: 'RBR', color: '#3671C6', secondary: '#FFC906', textOnPrimary: '#FFFFFF', engine: 'Red Bull Ford', carPace: 92, reliability: 87,
     drivers: [
       { code: 'VER', name: 'Max Verstappen', age: 28, role: 'race1', experience: 9, carFeel: 9, wet: 9, overtaking: 10, starts: 9, focus: 9, physical: 9, pace: 10 },
       { code: 'HAD', name: 'Isack Hadjar', age: 21, role: 'race2', experience: 4, carFeel: 7, wet: 6, overtaking: 7, starts: 5, focus: 6, physical: 7, pace: 8 },
       { code: 'TSU', name: 'Yuki Tsunoda', age: 26, role: 'reserve', experience: 7, carFeel: 7, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
     ] },
-  { id: 'mer', name: 'Mercedes', short: 'MER', color: '#27F4D2', engine: 'Mercedes', carPace: 91, reliability: 90,
+  { id: 'mer', name: 'Mercedes', short: 'MER', color: '#27F4D2', secondary: '#000000', textOnPrimary: '#0B0E14', engine: 'Mercedes', carPace: 91, reliability: 90,
     drivers: [
       { code: 'RUS', name: 'George Russell', age: 28, role: 'race1', experience: 7, carFeel: 8, wet: 7, overtaking: 7, starts: 7, focus: 8, physical: 7, pace: 8 },
       { code: 'ANT', name: 'Kimi Antonelli', age: 19, role: 'race2', experience: 3, carFeel: 7, wet: 7, overtaking: 6, starts: 6, focus: 6, physical: 7, pace: 8 },
       { code: 'VES', name: 'Frederik Vesti', age: 24, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
     ] },
-  { id: 'ast', name: 'Aston Martin', short: 'AST', color: '#00665E', engine: 'Honda', carPace: 85, reliability: 84,
+  { id: 'ast', name: 'Aston Martin', short: 'AST', color: '#00665E', secondary: '#CEDC00', textOnPrimary: '#FFFFFF', engine: 'Honda', carPace: 85, reliability: 84,
     drivers: [
       { code: 'ALO', name: 'Fernando Alonso', age: 44, role: 'race1', experience: 10, carFeel: 9, wet: 8, overtaking: 9, starts: 9, focus: 9, physical: 6, pace: 8 },
       { code: 'STR', name: 'Lance Stroll', age: 27, role: 'race2', experience: 6, carFeel: 6, wet: 5, overtaking: 5, starts: 5, focus: 5, physical: 6, pace: 6 },
       { code: 'CRA', name: 'Jak Crawford', age: 21, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
     ] },
-  { id: 'wil', name: 'Williams', short: 'WIL', color: '#00A0DE', engine: 'Mercedes', carPace: 84, reliability: 85,
+  { id: 'wil', name: 'Williams', short: 'WIL', color: '#00A0DE', secondary: '#FFFFFF', textOnPrimary: '#FFFFFF', engine: 'Mercedes', carPace: 84, reliability: 85,
     drivers: [
       { code: 'SAI', name: 'Carlos Sainz', age: 31, role: 'race1', experience: 8, carFeel: 8, wet: 6, overtaking: 7, starts: 7, focus: 7, physical: 7, pace: 8 },
       { code: 'ALB', name: 'Alexander Albon', age: 29, role: 'race2', experience: 7, carFeel: 7, wet: 7, overtaking: 7, starts: 6, focus: 7, physical: 7, pace: 7 },
       { code: 'BRW', name: 'Luke Browning', age: 24, role: 'reserve', experience: 1, carFeel: 5, wet: 5, overtaking: 5, starts: 5, focus: 6, physical: 7, pace: 6 },
     ] },
-  { id: 'aud', name: 'Audi', short: 'AUD', color: '#9B0000', engine: 'Audi', carPace: 80, reliability: 78,
+  { id: 'aud', name: 'Audi', short: 'AUD', color: '#9B0000', secondary: '#C8CDD3', textOnPrimary: '#FFFFFF', engine: 'Audi', carPace: 80, reliability: 78,
     drivers: [
       { code: 'HUL', name: 'Nico Hülkenberg', age: 38, role: 'race1', experience: 9, carFeel: 7, wet: 7, overtaking: 6, starts: 6, focus: 7, physical: 6, pace: 7 },
       { code: 'BOR', name: 'Gabriel Bortoleto', age: 21, role: 'race2', experience: 4, carFeel: 7, wet: 7, overtaking: 6, starts: 6, focus: 7, physical: 7, pace: 7 },
       { code: 'SLA', name: 'Freddie Slater', age: 17, role: 'reserve', experience: 1, carFeel: 4, wet: 4, overtaking: 4, starts: 4, focus: 4, physical: 6, pace: 5 },
     ] },
-  { id: 'alp', name: 'Alpine', short: 'ALP', color: '#00A1E8', engine: 'Mercedes', carPace: 79, reliability: 80,
+  { id: 'alp', name: 'Alpine', short: 'ALP', color: '#00A1E8', secondary: '#FF1493', textOnPrimary: '#FFFFFF', engine: 'Mercedes', carPace: 79, reliability: 80,
     drivers: [
       { code: 'GAS', name: 'Pierre Gasly', age: 30, role: 'race1', experience: 8, carFeel: 7, wet: 7, overtaking: 7, starts: 6, focus: 7, physical: 7, pace: 7 },
       { code: 'COL', name: 'Franco Colapinto', age: 22, role: 'race2', experience: 3, carFeel: 6, wet: 5, overtaking: 6, starts: 5, focus: 5, physical: 6, pace: 6 },
       { code: 'ARO', name: 'Paul Aron', age: 23, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 6 },
     ] },
-  { id: 'haa', name: 'Haas', short: 'HAA', color: '#B6BABD', engine: 'Ferrari', carPace: 76, reliability: 82,
+  { id: 'haa', name: 'Haas', short: 'HAA', color: '#B6BABD', secondary: '#E8002D', textOnPrimary: '#0B0E14', engine: 'Ferrari', carPace: 76, reliability: 82,
     drivers: [
       { code: 'OCO', name: 'Esteban Ocon', age: 29, role: 'race1', experience: 8, carFeel: 7, wet: 6, overtaking: 6, starts: 6, focus: 6, physical: 6, pace: 7 },
       { code: 'BEA', name: 'Oliver Bearman', age: 21, role: 'race2', experience: 4, carFeel: 7, wet: 6, overtaking: 6, starts: 6, focus: 7, physical: 7, pace: 7 },
       { code: 'DOO', name: 'Jack Doohan', age: 23, role: 'reserve', experience: 3, carFeel: 6, wet: 5, overtaking: 5, starts: 5, focus: 5, physical: 6, pace: 6 },
     ] },
-  { id: 'rb', name: 'Racing Bulls', short: 'RB', color: '#6692FF', engine: 'Red Bull Ford', carPace: 78, reliability: 81,
+  { id: 'rb', name: 'Racing Bulls', short: 'RB', color: '#6692FF', secondary: '#FFFFFF', textOnPrimary: '#FFFFFF', engine: 'Red Bull Ford', carPace: 78, reliability: 81,
     drivers: [
       { code: 'LAW', name: 'Liam Lawson', age: 24, role: 'race1', experience: 4, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 5, physical: 7, pace: 6 },
       { code: 'LIN', name: 'Arvid Lindblad', age: 18, role: 'race2', experience: 1, carFeel: 5, wet: 5, overtaking: 5, starts: 4, focus: 5, physical: 7, pace: 6 },
       { code: 'IWA', name: 'Ayumu Iwasa', age: 24, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 6, physical: 7, pace: 6 },
     ] },
-  { id: 'cad', name: 'Cadillac', short: 'CAD', color: '#D4AF37', engine: 'Ferrari', carPace: 74, reliability: 75,
+  { id: 'cad', name: 'Cadillac', short: 'CAD', color: '#D4AF37', secondary: '#0B0E14', textOnPrimary: '#0B0E14', engine: 'Ferrari', carPace: 74, reliability: 75,
     drivers: [
       { code: 'PER', name: 'Sergio Pérez', age: 36, role: 'race1', experience: 9, carFeel: 7, wet: 6, overtaking: 7, starts: 6, focus: 6, physical: 6, pace: 7 },
       { code: 'BOT', name: 'Valtteri Bottas', age: 36, role: 'race2', experience: 8, carFeel: 7, wet: 6, overtaking: 5, starts: 6, focus: 7, physical: 6, pace: 6 },
@@ -196,25 +223,25 @@ const ENGINE_SUPPLIERS = [
 ];
 
 const SPONSORS = [
-  { id: 'intelli', name: 'Intelli Tech', tier: 'Título', category: 'Educação/Tech', payout: 1.29 },
-  { id: 'g7', name: 'G7 Partners', tier: 'Título', category: 'Investimentos', payout: 1.43 },
-  { id: 'verdant', name: 'Verdant ESG', tier: 'Título', category: 'Sustentabilidade', payout: 1.14 },
-  { id: 'vertice', name: 'Vértice Capital', tier: 'Principal', category: 'Investimentos', payout: 0.86 },
-  { id: 'andes', name: 'Andes Investimentos', tier: 'Principal', category: 'Investimentos', payout: 0.79 },
-  { id: 'cleanpath', name: 'CleanPath Energy', tier: 'Principal', category: 'Energia', payout: 0.93 },
-  { id: 'bionova', name: 'BioNova Sustentável', tier: 'Principal', category: 'Sustentabilidade', payout: 0.71 },
-  { id: 'confianca', name: 'Banco Confiança', tier: 'Principal', category: 'Bancos', payout: 1.0 },
-  { id: 'meridian', name: 'Meridian Bank', tier: 'Principal', category: 'Bancos', payout: 0.86 },
-  { id: 'conecta', name: 'ConectaNet', tier: 'Técnico', category: 'Telecom', payout: 0.57 },
-  { id: 'signalone', name: 'SignalOne Telecom', tier: 'Técnico', category: 'Telecom', payout: 0.5 },
-  { id: 'voltagem', name: 'Voltagem Energy', tier: 'Técnico', category: 'Bebidas', payout: 0.64 },
-  { id: 'rush', name: 'Rush Energy', tier: 'Técnico', category: 'Bebidas', payout: 0.57 },
-  { id: 'apex', name: 'Apex Componentes', tier: 'Técnico', category: 'Autopeças', payout: 0.5 },
-  { id: 'turbodyne', name: 'TurboDyne Parts', tier: 'Técnico', category: 'Autopeças', payout: 0.43 },
-  { id: 'skybridge', name: 'SkyBridge Airlines', tier: 'Associado', category: 'Aviação', payout: 0.36 },
-  { id: 'cronos', name: 'Cronos Genève', tier: 'Associado', category: 'Relógios', payout: 0.43 },
-  { id: 'betpro', name: 'BetPro Gaming', tier: 'Associado', category: 'Apostas', payout: 0.36 },
-  { id: 'escudo', name: 'Escudo Seguros', tier: 'Associado', category: 'Seguros', payout: 0.29 },
+  { id: 'intelli', name: 'Intelli Tech', tier: 'Título', category: 'Educação/Tech', payout: 13 },
+  { id: 'g7', name: 'G7 Partners', tier: 'Título', category: 'Investimentos', payout: 14 },
+  { id: 'verdant', name: 'Verdant ESG', tier: 'Título', category: 'Sustentabilidade', payout: 12 },
+  { id: 'vertice', name: 'Vértice Capital', tier: 'Principal', category: 'Investimentos', payout: 12 },
+  { id: 'andes', name: 'Andes Investimentos', tier: 'Principal', category: 'Investimentos', payout: 11 },
+  { id: 'cleanpath', name: 'CleanPath Energy', tier: 'Principal', category: 'Energia', payout: 12.5 },
+  { id: 'bionova', name: 'BioNova Sustentável', tier: 'Principal', category: 'Sustentabilidade', payout: 11 },
+  { id: 'confianca', name: 'Banco Confiança', tier: 'Principal', category: 'Bancos', payout: 13 },
+  { id: 'meridian', name: 'Meridian Bank', tier: 'Principal', category: 'Bancos', payout: 12 },
+  { id: 'conecta', name: 'ConectaNet', tier: 'Técnico', category: 'Telecom', payout: 11.5 },
+  { id: 'signalone', name: 'SignalOne Telecom', tier: 'Técnico', category: 'Telecom', payout: 11 },
+  { id: 'voltagem', name: 'Voltagem Energy', tier: 'Técnico', category: 'Bebidas', payout: 12 },
+  { id: 'rush', name: 'Rush Energy', tier: 'Técnico', category: 'Bebidas', payout: 11.5 },
+  { id: 'apex', name: 'Apex Componentes', tier: 'Técnico', category: 'Autopeças', payout: 11 },
+  { id: 'turbodyne', name: 'TurboDyne Parts', tier: 'Técnico', category: 'Autopeças', payout: 10.5 },
+  { id: 'skybridge', name: 'SkyBridge Airlines', tier: 'Associado', category: 'Aviação', payout: 12 },
+  { id: 'cronos', name: 'Cronos Genève', tier: 'Associado', category: 'Relógios', payout: 12.5 },
+  { id: 'betpro', name: 'BetPro Gaming', tier: 'Associado', category: 'Apostas', payout: 12 },
+  { id: 'escudo', name: 'Escudo Seguros', tier: 'Associado', category: 'Seguros', payout: 11.5 },
 ];
 
 /* ==================================================================
@@ -722,7 +749,7 @@ function initCareerState(playerTeamId) {
     const supplier = ENGINE_SUPPLIERS.find(e => e.name === team.engine);
     const dev = initDevLevels(team.carPace);
     teams[team.id] = {
-      id: team.id, name: team.name, short: team.short, color: team.color,
+      id: team.id, name: team.name, short: team.short, color: team.color, secondary: team.secondary, textOnPrimary: team.textOnPrimary,
       basePace: team.carPace, baseReliability: team.reliability,
       devLevels: dev.devLevels, devLevelsStart: dev.devLevelsStart, devInvest: dev.devInvest,
       budget, sponsorDeals: [], engineSupplierId: supplier ? supplier.id : 'mercedes',
@@ -919,12 +946,12 @@ function maybeGenerateSponsorOffer(career) {
   const sponsor = pick(pool);
   const constructorRank = Object.entries(career.constructorStandings).sort((a, b) => b[1] - a[1]);
   const posIdx = constructorRank.findIndex(([id]) => id === career.playerTeamId);
-  const posFactor = posIdx < 0 ? 0.6 : clamp(1.3 - posIdx * 0.06, 0.5, 1.3);
-  const tierMult = { 'Título': 2.2, 'Principal': 1.4, 'Técnico': 1.0, 'Associado': 0.7 }[sponsor.tier] || 1;
+  const posFactor = posIdx < 0 ? 0.75 : clamp(1.2 - posIdx * 0.045, 0.65, 1.2);
+  const tierMult = { 'Título': 1.3, 'Principal': 1.1, 'Técnico': 0.95, 'Associado': 0.8 }[sponsor.tier] || 1;
   const raceCount = randInt(6, 22);
-  const totalValue = Math.max(0.15, Math.round(sponsor.payout * tierMult * posFactor * (raceCount / 10) * 100) / 100);
+  const totalValue = Math.max(3, Math.round(sponsor.payout * tierMult * posFactor * (raceCount / 10) * 100) / 100);
   const hasWinBonus = Math.random() < 0.3;
-  const winBonus = hasWinBonus ? Math.max(0.05, Math.round(totalValue * 0.08 * 100) / 100) : null;
+  const winBonus = hasWinBonus ? Math.max(0.3, Math.round(totalValue * 0.08 * 100) / 100) : null;
   return { sponsorId: sponsor.id, raceCount, totalValue, winBonus };
 }
 
@@ -1088,6 +1115,15 @@ function reducer(state, action) {
       const team = career.teams[state.playerTeamId];
       const current = (team.devInvest && team.devInvest[action.category]) || 0;
       const next = Math.round(clamp(current + action.delta, 0, 0.999) * 1000) / 1000;
+      const teams = { ...career.teams, [state.playerTeamId]: { ...team, devInvest: { ...team.devInvest, [action.category]: next } } };
+      return { ...state, career: { ...career, teams } };
+    }
+    case 'SET_DEV_INVEST_EXACT': {
+      const career = state.career;
+      const team = career.teams[state.playerTeamId];
+      const value = Number(action.value);
+      if (Number.isNaN(value)) return state;
+      const next = Math.round(clamp(value, 0, 0.999) * 1000) / 1000;
       const teams = { ...career.teams, [state.playerTeamId]: { ...team, devInvest: { ...team.devInvest, [action.category]: next } } };
       return { ...state, career: { ...career, teams } };
     }
@@ -1838,11 +1874,11 @@ function renderCareerUpgradesScreen(state) {
           <div class="h-full rounded-full" style="width:${level}%; background-color:${tone}"></div>
         </div>
         <div class="flex items-center justify-between">
-          <span class="cm-body text-xs text-slate-500">Investimento/corrida</span>
-          <div class="flex items-center gap-2">
-            <button data-action="${act({ type: 'ADJUST_DEV_INVEST', category: c.id, delta: -0.05 })}" class="bg-slate-800 border border-slate-700 rounded w-7 h-7 cm-body text-slate-200">−</button>
-            <span class="cm-mono text-sm text-amber-400 w-14 text-center">${fmtMoney(invest)}</span>
-            <button data-action="${act({ type: 'ADJUST_DEV_INVEST', category: c.id, delta: 0.05 })}" class="bg-slate-800 border border-slate-700 rounded w-7 h-7 cm-body text-slate-200">+</button>
+          <span class="cm-body text-xs text-slate-500">Investimento/corrida ($ mil)</span>
+          <div class="flex items-center gap-1.5">
+            <button data-action="${act({ type: 'ADJUST_DEV_INVEST', category: c.id, delta: -0.05 })}" class="bg-slate-800 border border-slate-700 rounded w-7 h-7 cm-body text-slate-200 shrink-0">−</button>
+            <input type="number" inputmode="numeric" min="0" max="999" step="1" value="${Math.round(invest * 1000)}" data-dev-input="${c.id}" class="cm-mono text-sm text-amber-400 bg-slate-950 border border-slate-700 rounded w-16 text-center py-1">
+            <button data-action="${act({ type: 'ADJUST_DEV_INVEST', category: c.id, delta: 0.05 })}" class="bg-slate-800 border border-slate-700 rounded w-7 h-7 cm-body text-slate-200 shrink-0">+</button>
           </div>
         </div>
       </div>
@@ -2113,8 +2149,32 @@ function scheduleAutoplay() {
   }
 }
 
+function currentThemeTeam(s) {
+  if (!s.playerTeamId) return null;
+  if (s.mode === 'career' && s.career && s.career.teams) return s.career.teams[s.playerTeamId] || null;
+  if (s.mode === 'quick') return TEAMS.find(t => t.id === s.playerTeamId) || null;
+  return null;
+}
+
+function applyTeamTheme(s) {
+  try {
+    const team = currentThemeTeam(s);
+    const root = document.documentElement;
+    if (!team) {
+      root.style.setProperty('--tp', '#FFB020');
+      root.style.setProperty('--ts', '#4FD1E8');
+      root.style.setProperty('--ttext', '#0B0E14');
+      return;
+    }
+    root.style.setProperty('--tp', team.color || '#FFB020');
+    root.style.setProperty('--ts', team.secondary || '#4FD1E8');
+    root.style.setProperty('--ttext', team.textOnPrimary || '#0B0E14');
+  } catch (e) { /* theming is cosmetic only — never let it break the app */ }
+}
+
 function render() {
   const root = document.getElementById('root');
+  applyTeamTheme(state);
   const timingEl = document.getElementById('timing-tower-scroll');
   const timingScroll = timingEl ? timingEl.scrollTop : null;
   const eventEl = document.getElementById('event-terminal-scroll');
@@ -2144,6 +2204,15 @@ document.getElementById('root').addEventListener('click', (e) => {
   if (!btn) return;
   const action = JSON.parse(btn.getAttribute('data-action'));
   dispatch(action);
+});
+
+document.getElementById('root').addEventListener('change', (e) => {
+  const input = e.target.closest('[data-dev-input]');
+  if (!input) return;
+  const category = input.getAttribute('data-dev-input');
+  const thousands = Number(input.value);
+  if (Number.isNaN(thousands)) return;
+  dispatch({ type: 'SET_DEV_INVEST_EXACT', category, value: thousands / 1000 });
 });
 
 render();

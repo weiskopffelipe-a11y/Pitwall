@@ -837,7 +837,7 @@ function initCareerState(playerTeamId, startYear) {
   Object.keys(teams).forEach(id => { constructorStandings[id] = 0; });
 
   return {
-    year, playerTeamId, managerName: null, lastSeenLogCount: 0, teams, driverPool, driverStandings, constructorStandings,
+    year, playerTeamId, managerName: null, lastSeenLogCount: 0, roundsSinceSponsorOffer: 0, teams, driverPool, driverStandings, constructorStandings,
     calendar: buildCalendarForYear(year), roundIndex: 0, seasonHistory: [], raceSequence: 0,
     log: ['Bem-vindo à Pitwall Manager! Temporada 2026 pronta para começar.'],
   };
@@ -937,7 +937,7 @@ function processOffseason(career) {
     else if (d.age >= 33) retireChance = 0.02;
     if (Math.random() < retireChance) {
       d.retired = true;
-      log.push(`${d.name} anuncia aposentadoria aos ${d.age} anos.`);
+      if (d.teamId === career.playerTeamId) log.push(`${d.name} anuncia aposentadoria aos ${d.age} anos.`);
       openSeats.push({ teamId: d.teamId, role: d.role, fromCode: d.code });
     }
   });
@@ -951,7 +951,7 @@ function processOffseason(career) {
         d.contractYears = randInt(1, 3);
       } else {
         openSeats.push({ teamId: d.teamId, role: d.role, fromCode: d.code });
-        log.push(`${d.name} deixa a equipe como agente livre.`);
+        if (d.teamId === career.playerTeamId) log.push(`${d.name} deixa a equipe como agente livre.`);
         d.teamId = null; d.role = null;
       }
     }
@@ -983,7 +983,9 @@ function processOffseason(career) {
     d.salary = roleAdjustedSalary(d, destRole);
     d.pendingTeamId = undefined;
     d.pendingRole = undefined;
-    log.push(isRenewal ? `${d.name} segue na ${teams[destTeamId].short} em ${career.year + 1}, como combinado.` : `${d.name} chega à ${teams[destTeamId].short} para ${career.year + 1}, como combinado.`);
+    if (destTeamId === career.playerTeamId || oldTeamId === career.playerTeamId) {
+      log.push(isRenewal ? `${d.name} segue na ${teams[destTeamId].short} em ${career.year + 1}, como combinado.` : `${d.name} chega à ${teams[destTeamId].short} para ${career.year + 1}, como combinado.`);
+    }
   });
   freeAgents = Object.values(driverPool).filter(d => !d.retired && !d.teamId);
 
@@ -1003,12 +1005,12 @@ function processOffseason(career) {
     if (freeAgents.length && Math.random() < 0.6) {
       hire = freeAgents.shift();
       hire.salary = roleAdjustedSalary(hire, seat.role);
-      log.push(`${hire.name} assina com ${teams[seat.teamId].short} (${roleLabel(seat.role)}).`);
+      if (seat.teamId === career.playerTeamId) log.push(`${hire.name} assina com ${teams[seat.teamId].short} (${roleLabel(seat.role)}).`);
     } else {
       hire = generateRookie(seat.teamId, driverPool);
       hire.salary = roleAdjustedSalary(hire, seat.role);
       driverPool[hire.code] = hire;
-      log.push(`Estreante ${hire.name} (${hire.age} anos) assina com ${teams[seat.teamId].short}.`);
+      if (seat.teamId === career.playerTeamId) log.push(`Estreante ${hire.name} (${hire.age} anos) assina com ${teams[seat.teamId].short}.`);
     }
     hire.teamId = seat.teamId; hire.role = seat.role; hire.contractYears = randInt(1, 3);
   });
@@ -1108,7 +1110,9 @@ function sponsorsCurrentlyActive(career) {
 function maybeGenerateSponsorOffer(career) {
   const team = career.teams[career.playerTeamId];
   if (team && (team.sponsorDeals || []).length >= 5) return null;
-  if (Math.random() > 0.32) return null;
+  const droughtRounds = career.roundsSinceSponsorOffer || 0;
+  const guaranteed = droughtRounds >= 6;
+  if (!guaranteed && Math.random() > 0.32) return null;
   const taken = sponsorsCurrentlyActive(career);
   const pool = SPONSORS.filter(s => !taken.has(s.id));
   if (!pool.length) return null;
@@ -1230,17 +1234,19 @@ function reducer(state, action) {
         const transferNews = maybeGenerateAiTransferNews(advanced);
         if (transferNews) {
           const driverPool = { ...advanced.driverPool, [transferNews.code]: { ...advanced.driverPool[transferNews.code], pendingTeamId: transferNews.teamId, pendingRole: transferNews.role } };
-          const log = [...advanced.log, `Silly season: ${transferNews.name} vai correr pela ${transferNews.teamShort} em ${transferNews.nextYear}.`].slice(-40);
-          advanced = { ...advanced, driverPool, log };
+          advanced = { ...advanced, driverPool };
         }
         const renewalNews = maybeGenerateAiRenewalNews(advanced);
         if (renewalNews) {
           const driverPool = { ...advanced.driverPool, [renewalNews.code]: { ...advanced.driverPool[renewalNews.code], pendingTeamId: renewalNews.teamId, pendingRole: renewalNews.role } };
-          const log = [...advanced.log, `${renewalNews.name} renova com a ${renewalNews.teamShort} para ${renewalNews.nextYear}.`].slice(-40);
-          advanced = { ...advanced, driverPool, log };
+          advanced = { ...advanced, driverPool };
         }
         const offer = maybeGenerateSponsorOffer(advanced);
-        if (offer) return { ...state, career: advanced, phase: 'career-sponsor-offer', pendingSponsorOffer: offer, careerLastRaceApplied: null };
+        if (offer) {
+          advanced = { ...advanced, roundsSinceSponsorOffer: 0 };
+          return { ...state, career: advanced, phase: 'career-sponsor-offer', pendingSponsorOffer: offer, careerLastRaceApplied: null };
+        }
+        advanced = { ...advanced, roundsSinceSponsorOffer: (advanced.roundsSinceSponsorOffer || 0) + 1 };
         return { ...state, career: advanced, phase: 'career-hub', careerLastRaceApplied: null };
       }
       const off = processOffseason(career);
@@ -1662,9 +1668,9 @@ function renderPlaybackBar(autoPlay, speed, lap) {
   const playLabel = autoPlay ? '⏸ Pausar' : (lap === 0 ? '▶ Iniciar corrida' : '▶ Retomar');
   return `
     <div class="shrink-0 safe-bottom bg-slate-950 border-t border-slate-800 px-2 py-2 flex items-center gap-1.5">
-      <button data-action="${act({ type: 'TICK' })}" class="flex-1 cm-body text-sm bg-slate-800 border border-slate-700 rounded-md py-2 flex items-center justify-center gap-1.5 text-slate-100">Avançar →</button>
+      <button data-action="${act({ type: 'TICK' })}" class="cm-body text-sm bg-slate-800 border border-slate-700 rounded-md py-2 px-3 flex items-center justify-center gap-1.5 text-slate-100 whitespace-nowrap">Avançar →</button>
       <div class="flex gap-1">${speedButtons}</div>
-      <button data-action="${act({ type: 'TOGGLE_AUTOPLAY' })}" class="bg-amber-500 text-slate-950 rounded-md px-3 py-2 cm-body text-sm font-semibold whitespace-nowrap">${playLabel}</button>
+      <button data-action="${act({ type: 'TOGGLE_AUTOPLAY' })}" class="flex-1 bg-amber-500 text-slate-950 rounded-md px-3 py-2 cm-body text-sm font-semibold whitespace-nowrap">${playLabel}</button>
     </div>
   `;
 }
@@ -2665,6 +2671,7 @@ function repairLoadedCareer(career) {
   });
   if (typeof career.managerName === 'undefined') career.managerName = null;
   if (typeof career.lastSeenLogCount !== 'number') career.lastSeenLogCount = (career.log || []).length;
+  if (typeof career.roundsSinceSponsorOffer !== 'number') career.roundsSinceSponsorOffer = 0;
   if (!Array.isArray(career.calendar) || !career.calendar.length) career.calendar = buildCalendarForYear(career.year || 2026);
   if (typeof career.roundIndex !== 'number' || career.roundIndex < 0 || career.roundIndex >= career.calendar.length) career.roundIndex = 0;
   if (typeof career.raceSequence !== 'number') career.raceSequence = 0;

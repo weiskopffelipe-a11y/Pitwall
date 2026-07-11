@@ -10,7 +10,8 @@
 <title>Pitwall Manager</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Orbitron:wght@700;900&display=swap');
+  .cm-splash { font-family: 'Orbitron', sans-serif; }
   :root {
     --tp: #FFB020;
     --ts: #4FD1E8;
@@ -52,6 +53,19 @@
   .text-cyan-300, .text-cyan-400 { color: var(--ts) !important; }
   .border-cyan-400, .border-cyan-500 { border-color: var(--ts) !important; }
   .team-accent-bar { background: linear-gradient(90deg, var(--tp), var(--ts)); }
+  :root { --tp-dark: var(--tp); --tp-tint: #f4f6f8; --tp-tint2: #dbeafe; }
+  @supports (color: color-mix(in srgb, red, blue)) {
+    :root {
+      --tp-dark: color-mix(in srgb, var(--tp) 65%, black);
+      --tp-tint: color-mix(in srgb, var(--tp) 9%, white);
+      --tp-tint2: color-mix(in srgb, var(--tp) 18%, white);
+    }
+  }
+  .team-bg-tint { background-color: var(--tp-tint); }
+  .team-bg-tint2 { background-color: var(--tp-tint2); }
+  .team-text { color: var(--tp-dark); }
+  .team-btn { background-color: var(--tp); color: var(--ttext); }
+  .team-border { border-color: var(--tp); }
 </style>
 </head>
 <body class="cm-body">
@@ -67,69 +81,69 @@ const NAME_POOL_LAST = ['Silva','Bianchi','Moreau','Larsson','Weber','Costa','Ro
 const TEAMS = [
   { id: 'mcl', name: 'McLaren', short: 'MCL', color: '#FF8000', secondary: '#FFFFFF', textOnPrimary: '#0B0E14', engine: 'Mercedes', carPace: 95, reliability: 92,
     drivers: [
-      { code: 'NOR', name: 'Lando Norris', age: 26, role: 'race1', experience: 7, carFeel: 9, wet: 7, overtaking: 8, starts: 7, focus: 8, physical: 8, pace: 9 },
-      { code: 'PIA', name: 'Oscar Piastri', age: 25, role: 'race2', experience: 5, carFeel: 8, wet: 7, overtaking: 8, starts: 7, focus: 9, physical: 8, pace: 9 },
-      { code: 'FOR', name: 'Leonardo Fornaroli', age: 23, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 7, physical: 7, pace: 7 },
+      { code: 'NOR', nat: 'GB', name: 'Lando Norris', age: 26, role: 'race1', experience: 7, carFeel: 9, wet: 7, overtaking: 8, starts: 7, focus: 8, physical: 8, pace: 9 },
+      { code: 'PIA', nat: 'AU', name: 'Oscar Piastri', age: 25, role: 'race2', experience: 5, carFeel: 8, wet: 7, overtaking: 8, starts: 7, focus: 9, physical: 8, pace: 9 },
+      { code: 'FOR', nat: 'IT', name: 'Leonardo Fornaroli', age: 23, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 7, physical: 7, pace: 7 },
     ] },
   { id: 'fer', name: 'Ferrari', short: 'FER', color: '#E8002D', secondary: '#FFD500', textOnPrimary: '#FFFFFF', engine: 'Ferrari', carPace: 93, reliability: 88,
     drivers: [
-      { code: 'LEC', name: 'Charles Leclerc', age: 28, role: 'race1', experience: 8, carFeel: 8, wet: 7, overtaking: 8, starts: 8, focus: 7, physical: 8, pace: 9 },
-      { code: 'HAM', name: 'Lewis Hamilton', age: 41, role: 'race2', experience: 10, carFeel: 9, wet: 10, overtaking: 9, starts: 8, focus: 9, physical: 7, pace: 8 },
-      { code: 'GIO', name: 'Antonio Giovinazzi', age: 32, role: 'reserve', experience: 6, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 7, physical: 6, pace: 6 },
+      { code: 'LEC', nat: 'MC', name: 'Charles Leclerc', age: 28, role: 'race1', experience: 8, carFeel: 8, wet: 7, overtaking: 8, starts: 8, focus: 7, physical: 8, pace: 9 },
+      { code: 'HAM', nat: 'GB', name: 'Lewis Hamilton', age: 41, role: 'race2', experience: 10, carFeel: 9, wet: 10, overtaking: 9, starts: 8, focus: 9, physical: 7, pace: 8 },
+      { code: 'GIO', nat: 'IT', name: 'Antonio Giovinazzi', age: 32, role: 'reserve', experience: 6, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 7, physical: 6, pace: 6 },
     ] },
   { id: 'rbr', name: 'Red Bull Racing', short: 'RBR', color: '#1E3A8A', secondary: '#E8002D', textOnPrimary: '#FFFFFF', engine: 'Red Bull Ford', carPace: 92, reliability: 87,
     drivers: [
-      { code: 'VER', name: 'Max Verstappen', age: 28, role: 'race1', experience: 9, carFeel: 9, wet: 9, overtaking: 10, starts: 9, focus: 9, physical: 9, pace: 10 },
-      { code: 'HAD', name: 'Isack Hadjar', age: 21, role: 'race2', experience: 4, carFeel: 7, wet: 6, overtaking: 7, starts: 5, focus: 6, physical: 7, pace: 8 },
-      { code: 'TSU', name: 'Yuki Tsunoda', age: 26, role: 'reserve', experience: 7, carFeel: 7, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
+      { code: 'VER', nat: 'NL', name: 'Max Verstappen', age: 28, role: 'race1', experience: 9, carFeel: 9, wet: 9, overtaking: 10, starts: 9, focus: 9, physical: 9, pace: 10 },
+      { code: 'HAD', nat: 'FR', name: 'Isack Hadjar', age: 21, role: 'race2', experience: 4, carFeel: 7, wet: 6, overtaking: 7, starts: 5, focus: 6, physical: 7, pace: 8 },
+      { code: 'TSU', nat: 'JP', name: 'Yuki Tsunoda', age: 26, role: 'reserve', experience: 7, carFeel: 7, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
     ] },
   { id: 'mer', name: 'Mercedes', short: 'MER', color: '#27F4D2', secondary: '#000000', textOnPrimary: '#0B0E14', engine: 'Mercedes', carPace: 91, reliability: 90,
     drivers: [
-      { code: 'RUS', name: 'George Russell', age: 28, role: 'race1', experience: 7, carFeel: 8, wet: 7, overtaking: 7, starts: 7, focus: 8, physical: 7, pace: 8 },
-      { code: 'ANT', name: 'Kimi Antonelli', age: 19, role: 'race2', experience: 3, carFeel: 7, wet: 7, overtaking: 6, starts: 6, focus: 6, physical: 7, pace: 8 },
-      { code: 'VES', name: 'Frederik Vesti', age: 24, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
+      { code: 'RUS', nat: 'GB', name: 'George Russell', age: 28, role: 'race1', experience: 7, carFeel: 8, wet: 7, overtaking: 7, starts: 7, focus: 8, physical: 7, pace: 8 },
+      { code: 'ANT', nat: 'IT', name: 'Kimi Antonelli', age: 19, role: 'race2', experience: 3, carFeel: 7, wet: 7, overtaking: 6, starts: 6, focus: 6, physical: 7, pace: 8 },
+      { code: 'VES', nat: 'DK', name: 'Frederik Vesti', age: 24, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
     ] },
   { id: 'ast', name: 'Aston Martin', short: 'AST', color: '#00665E', secondary: '#CEDC00', textOnPrimary: '#FFFFFF', engine: 'Honda', carPace: 85, reliability: 84,
     drivers: [
-      { code: 'ALO', name: 'Fernando Alonso', age: 44, role: 'race1', experience: 10, carFeel: 9, wet: 8, overtaking: 9, starts: 9, focus: 9, physical: 6, pace: 8 },
-      { code: 'STR', name: 'Lance Stroll', age: 27, role: 'race2', experience: 6, carFeel: 6, wet: 5, overtaking: 5, starts: 5, focus: 5, physical: 6, pace: 6 },
-      { code: 'CRA', name: 'Jak Crawford', age: 21, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
+      { code: 'ALO', nat: 'ES', name: 'Fernando Alonso', age: 44, role: 'race1', experience: 10, carFeel: 9, wet: 8, overtaking: 9, starts: 9, focus: 9, physical: 6, pace: 8 },
+      { code: 'STR', nat: 'CA', name: 'Lance Stroll', age: 27, role: 'race2', experience: 6, carFeel: 6, wet: 5, overtaking: 5, starts: 5, focus: 5, physical: 6, pace: 6 },
+      { code: 'CRA', nat: 'US', name: 'Jak Crawford', age: 21, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
     ] },
   { id: 'wil', name: 'Williams', short: 'WIL', color: '#00A0DE', secondary: '#FFFFFF', textOnPrimary: '#FFFFFF', engine: 'Mercedes', carPace: 84, reliability: 85,
     drivers: [
-      { code: 'SAI', name: 'Carlos Sainz', age: 31, role: 'race1', experience: 8, carFeel: 8, wet: 6, overtaking: 7, starts: 7, focus: 7, physical: 7, pace: 8 },
-      { code: 'ALB', name: 'Alexander Albon', age: 29, role: 'race2', experience: 7, carFeel: 7, wet: 7, overtaking: 7, starts: 6, focus: 7, physical: 7, pace: 7 },
-      { code: 'BRW', name: 'Luke Browning', age: 24, role: 'reserve', experience: 1, carFeel: 5, wet: 5, overtaking: 5, starts: 5, focus: 6, physical: 7, pace: 6 },
+      { code: 'SAI', nat: 'ES', name: 'Carlos Sainz', age: 31, role: 'race1', experience: 8, carFeel: 8, wet: 6, overtaking: 7, starts: 7, focus: 7, physical: 7, pace: 8 },
+      { code: 'ALB', nat: 'TH', name: 'Alexander Albon', age: 29, role: 'race2', experience: 7, carFeel: 7, wet: 7, overtaking: 7, starts: 6, focus: 7, physical: 7, pace: 7 },
+      { code: 'BRW', nat: 'GB', name: 'Luke Browning', age: 24, role: 'reserve', experience: 1, carFeel: 5, wet: 5, overtaking: 5, starts: 5, focus: 6, physical: 7, pace: 6 },
     ] },
   { id: 'aud', name: 'Audi', short: 'AUD', color: '#9B0000', secondary: '#C8CDD3', textOnPrimary: '#FFFFFF', engine: 'Audi', carPace: 80, reliability: 78,
     drivers: [
-      { code: 'HUL', name: 'Nico Hülkenberg', age: 38, role: 'race1', experience: 9, carFeel: 7, wet: 7, overtaking: 6, starts: 6, focus: 7, physical: 6, pace: 7 },
-      { code: 'BOR', name: 'Gabriel Bortoleto', age: 21, role: 'race2', experience: 4, carFeel: 7, wet: 7, overtaking: 6, starts: 6, focus: 7, physical: 7, pace: 7 },
-      { code: 'SLA', name: 'Freddie Slater', age: 17, role: 'reserve', experience: 1, carFeel: 4, wet: 4, overtaking: 4, starts: 4, focus: 4, physical: 6, pace: 5 },
+      { code: 'HUL', nat: 'DE', name: 'Nico Hülkenberg', age: 38, role: 'race1', experience: 9, carFeel: 7, wet: 7, overtaking: 6, starts: 6, focus: 7, physical: 6, pace: 7 },
+      { code: 'BOR', nat: 'BR', name: 'Gabriel Bortoleto', age: 21, role: 'race2', experience: 4, carFeel: 7, wet: 7, overtaking: 6, starts: 6, focus: 7, physical: 7, pace: 7 },
+      { code: 'SLA', nat: 'GB', name: 'Freddie Slater', age: 17, role: 'reserve', experience: 1, carFeel: 4, wet: 4, overtaking: 4, starts: 4, focus: 4, physical: 6, pace: 5 },
     ] },
   { id: 'alp', name: 'Alpine', short: 'ALP', color: '#00A1E8', secondary: '#FF1493', textOnPrimary: '#FFFFFF', engine: 'Mercedes', carPace: 79, reliability: 80,
     drivers: [
-      { code: 'GAS', name: 'Pierre Gasly', age: 30, role: 'race1', experience: 8, carFeel: 7, wet: 7, overtaking: 7, starts: 6, focus: 7, physical: 7, pace: 7 },
-      { code: 'COL', name: 'Franco Colapinto', age: 22, role: 'race2', experience: 3, carFeel: 6, wet: 5, overtaking: 6, starts: 5, focus: 5, physical: 6, pace: 6 },
-      { code: 'ARO', name: 'Paul Aron', age: 23, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 6 },
+      { code: 'GAS', nat: 'FR', name: 'Pierre Gasly', age: 30, role: 'race1', experience: 8, carFeel: 7, wet: 7, overtaking: 7, starts: 6, focus: 7, physical: 7, pace: 7 },
+      { code: 'COL', nat: 'AR', name: 'Franco Colapinto', age: 22, role: 'race2', experience: 3, carFeel: 6, wet: 5, overtaking: 6, starts: 5, focus: 5, physical: 6, pace: 6 },
+      { code: 'ARO', nat: 'EE', name: 'Paul Aron', age: 23, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 6 },
     ] },
   { id: 'haa', name: 'Haas', short: 'HAA', color: '#B6BABD', secondary: '#E8002D', textOnPrimary: '#0B0E14', engine: 'Ferrari', carPace: 76, reliability: 82,
     drivers: [
-      { code: 'OCO', name: 'Esteban Ocon', age: 29, role: 'race1', experience: 8, carFeel: 7, wet: 6, overtaking: 6, starts: 6, focus: 6, physical: 6, pace: 7 },
-      { code: 'BEA', name: 'Oliver Bearman', age: 21, role: 'race2', experience: 4, carFeel: 7, wet: 6, overtaking: 6, starts: 6, focus: 7, physical: 7, pace: 7 },
-      { code: 'DOO', name: 'Jack Doohan', age: 23, role: 'reserve', experience: 3, carFeel: 6, wet: 5, overtaking: 5, starts: 5, focus: 5, physical: 6, pace: 6 },
+      { code: 'OCO', nat: 'FR', name: 'Esteban Ocon', age: 29, role: 'race1', experience: 8, carFeel: 7, wet: 6, overtaking: 6, starts: 6, focus: 6, physical: 6, pace: 7 },
+      { code: 'BEA', nat: 'GB', name: 'Oliver Bearman', age: 21, role: 'race2', experience: 4, carFeel: 7, wet: 6, overtaking: 6, starts: 6, focus: 7, physical: 7, pace: 7 },
+      { code: 'DOO', nat: 'AU', name: 'Jack Doohan', age: 23, role: 'reserve', experience: 3, carFeel: 6, wet: 5, overtaking: 5, starts: 5, focus: 5, physical: 6, pace: 6 },
     ] },
   { id: 'rb', name: 'Racing Bulls', short: 'RB', color: '#6692FF', secondary: '#FFFFFF', textOnPrimary: '#FFFFFF', engine: 'Red Bull Ford', carPace: 78, reliability: 81,
     drivers: [
-      { code: 'LAW', name: 'Liam Lawson', age: 24, role: 'race1', experience: 4, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 5, physical: 7, pace: 6 },
-      { code: 'LIN', name: 'Arvid Lindblad', age: 18, role: 'race2', experience: 1, carFeel: 5, wet: 5, overtaking: 5, starts: 4, focus: 5, physical: 7, pace: 6 },
-      { code: 'IWA', name: 'Ayumu Iwasa', age: 24, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 6, physical: 7, pace: 6 },
+      { code: 'LAW', nat: 'NZ', name: 'Liam Lawson', age: 24, role: 'race1', experience: 4, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 5, physical: 7, pace: 6 },
+      { code: 'LIN', nat: 'GB', name: 'Arvid Lindblad', age: 18, role: 'race2', experience: 1, carFeel: 5, wet: 5, overtaking: 5, starts: 4, focus: 5, physical: 7, pace: 6 },
+      { code: 'IWA', nat: 'JP', name: 'Ayumu Iwasa', age: 24, role: 'reserve', experience: 2, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 6, physical: 7, pace: 6 },
     ] },
   { id: 'cad', name: 'Cadillac', short: 'CAD', color: '#D4AF37', secondary: '#0B0E14', textOnPrimary: '#0B0E14', engine: 'Ferrari', carPace: 74, reliability: 75,
     drivers: [
-      { code: 'PER', name: 'Sergio Pérez', age: 36, role: 'race1', experience: 9, carFeel: 7, wet: 6, overtaking: 7, starts: 6, focus: 6, physical: 6, pace: 7 },
-      { code: 'BOT', name: 'Valtteri Bottas', age: 36, role: 'race2', experience: 8, carFeel: 7, wet: 6, overtaking: 5, starts: 6, focus: 7, physical: 6, pace: 6 },
-      { code: 'ZHO', name: 'Guanyu Zhou', age: 27, role: 'reserve', experience: 6, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 6, physical: 6, pace: 6 },
+      { code: 'PER', nat: 'MX', name: 'Sergio Pérez', age: 36, role: 'race1', experience: 9, carFeel: 7, wet: 6, overtaking: 7, starts: 6, focus: 6, physical: 6, pace: 7 },
+      { code: 'BOT', nat: 'FI', name: 'Valtteri Bottas', age: 36, role: 'race2', experience: 8, carFeel: 7, wet: 6, overtaking: 5, starts: 6, focus: 7, physical: 6, pace: 6 },
+      { code: 'ZHO', nat: 'CN', name: 'Guanyu Zhou', age: 27, role: 'reserve', experience: 6, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 6, physical: 6, pace: 6 },
     ] },
 ];
 
@@ -189,15 +203,15 @@ const INCIDENT_DRY = ['perdeu o carro na curva e bateu', 'travou o freio e foi p
 const INCIDENT_WET = ['aquaplanou e girou na pista molhada', 'perdeu o controle na chuva forte e bateu no muro'];
 
 const F2_FREE_AGENTS = [
-  { code: 'DUN', name: 'Alexander Dunne', age: 20, experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
-  { code: 'SMO', name: 'Sebastián Montoya', age: 20, experience: 2, carFeel: 6, wet: 5, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 6 },
-  { code: 'HER', name: 'Colton Herta', age: 26, experience: 3, carFeel: 6, wet: 5, overtaking: 6, starts: 6, focus: 7, physical: 7, pace: 7 },
-  { code: 'CAM', name: 'Rafael Câmara', age: 19, experience: 1, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
-  { code: 'TSO', name: 'Nikola Tsolov', age: 20, experience: 2, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 6, physical: 7, pace: 6 },
-  { code: 'MAI', name: 'Kush Maini', age: 25, experience: 3, carFeel: 6, wet: 5, overtaking: 5, starts: 5, focus: 6, physical: 6, pace: 6 },
-  { code: 'MIY', name: 'Ritomo Miyata', age: 25, experience: 3, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 6, physical: 6, pace: 6 },
-  { code: 'STE', name: 'Martinius Stenshorne', age: 19, experience: 1, carFeel: 5, wet: 5, overtaking: 5, starts: 5, focus: 5, physical: 7, pace: 6 },
-  { code: 'DUR', name: 'Joshua Dürksen', age: 21, experience: 2, carFeel: 6, wet: 5, overtaking: 5, starts: 5, focus: 6, physical: 6, pace: 6 },
+  { code: 'DUN', nat: 'IE', name: 'Alexander Dunne', age: 20, experience: 2, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
+  { code: 'SMO', nat: 'CO', name: 'Sebastián Montoya', age: 20, experience: 2, carFeel: 6, wet: 5, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 6 },
+  { code: 'HER', nat: 'US', name: 'Colton Herta', age: 26, experience: 3, carFeel: 6, wet: 5, overtaking: 6, starts: 6, focus: 7, physical: 7, pace: 7 },
+  { code: 'CAM', nat: 'BR', name: 'Rafael Câmara', age: 19, experience: 1, carFeel: 6, wet: 6, overtaking: 6, starts: 5, focus: 6, physical: 7, pace: 7 },
+  { code: 'TSO', nat: 'BG', name: 'Nikola Tsolov', age: 20, experience: 2, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 6, physical: 7, pace: 6 },
+  { code: 'MAI', nat: 'IN', name: 'Kush Maini', age: 25, experience: 3, carFeel: 6, wet: 5, overtaking: 5, starts: 5, focus: 6, physical: 6, pace: 6 },
+  { code: 'MIY', nat: 'JP', name: 'Ritomo Miyata', age: 25, experience: 3, carFeel: 6, wet: 6, overtaking: 5, starts: 5, focus: 6, physical: 6, pace: 6 },
+  { code: 'STE', nat: 'NO', name: 'Martinius Stenshorne', age: 19, experience: 1, carFeel: 5, wet: 5, overtaking: 5, starts: 5, focus: 5, physical: 7, pace: 6 },
+  { code: 'DUR', nat: 'PY', name: 'Joshua Dürksen', age: 21, experience: 2, carFeel: 6, wet: 5, overtaking: 5, starts: 5, focus: 6, physical: 6, pace: 6 },
 ];
 
 const UPGRADE_CATEGORIES = [
@@ -215,11 +229,11 @@ const SALARY_ANCHORS = [[4.0, 0.08], [4.5, 0.11], [5.0, 0.15], [5.5, 0.28], [6.0
 const RACE_PRIZE_MONEY = [0.125, 0.110, 0.100, 0.090, 0.080, 0.065, 0.050, 0.035, 0.025, 0.010];
 
 const ENGINE_SUPPLIERS = [
-  { id: 'mercedes', name: 'Mercedes', power: 9, reliability: 9, costPerYear: 2.1 },
-  { id: 'ferrari', name: 'Ferrari', power: 9, reliability: 8, costPerYear: 2.0 },
-  { id: 'redbullford', name: 'Red Bull Ford', power: 8, reliability: 8, costPerYear: 1.6 },
-  { id: 'honda', name: 'Honda', power: 8, reliability: 8, costPerYear: 1.7 },
-  { id: 'audi', name: 'Audi', power: 7, reliability: 7, costPerYear: 1.3 },
+  { id: 'mercedes', name: 'Mercedes', power: 9, reliability: 9, costPerYear: 12 },
+  { id: 'ferrari', name: 'Ferrari', power: 9, reliability: 8, costPerYear: 12 },
+  { id: 'redbullford', name: 'Red Bull Ford', power: 8, reliability: 8, costPerYear: 10 },
+  { id: 'honda', name: 'Honda', power: 8, reliability: 8, costPerYear: 9 },
+  { id: 'audi', name: 'Audi', power: 7, reliability: 7, costPerYear: 8 },
 ];
 
 const SPONSORS = [
@@ -430,6 +444,11 @@ function aiDecide(car, weather, lap, totalLaps) {
         const compound = lapsLeft > 18 ? (Math.random() < 0.5 ? 'medium' : 'hard') : 'soft';
         c = { ...c, pendingPit: compound };
       }
+    } else if (wet && compoundDef.wetOk) {
+      const threshold = 75 + Math.random() * 12;
+      if (c.tyreWear > threshold && lapsLeft > 3) {
+        c = { ...c, pendingPit: weather.condition === 'heavy_rain' ? 'wet' : 'inter' };
+      }
     }
   }
 
@@ -632,15 +651,32 @@ const TRAIT_TEXT = {
   physical: { hi: 'Ótimo preparo físico', lo: 'Cansa no fim das corridas' },
   pace: { hi: 'Muito rápido', lo: 'Falta ritmo de corrida' },
 };
-function driverTraits(d) {
-  const positives = [], negatives = [];
+const TEAM_COMPLAINT_TEXT = {
+  aero: 'Acha que falta aerodinâmica no carro',
+  gearbox: 'Reclama da caixa de câmbio',
+  brakes: 'Pede freios mais consistentes',
+  electrical: 'Quer mais confiabilidade do sistema elétrico',
+  steering: 'Sente que a direção precisa de ajustes',
+  reliability: 'Cobra mais confiabilidade geral do carro',
+};
+function driverTraits(d, team) {
+  const positives = [];
   Object.keys(TRAIT_TEXT).forEach(key => {
     const v = d[key];
     if (v == null) return;
     if (v >= 8) positives.push(TRAIT_TEXT[key].hi);
-    else if (v <= 4) negatives.push(TRAIT_TEXT[key].lo);
   });
+  const negatives = [];
+  if (team && team.devLevels) {
+    const ranked = UPGRADE_CATEGORIES.map(c => ({ id: c.id, lvl: team.devLevels[c.id] != null ? team.devLevels[c.id] : DEV_BASELINE })).sort((a, b) => a.lvl - b.lvl);
+    ranked.slice(0, 3).forEach(r => { if (r.lvl < 75 && TEAM_COMPLAINT_TEXT[r.id]) negatives.push(TEAM_COMPLAINT_TEXT[r.id]); });
+  }
   return { positives, negatives };
+}
+
+function roleAdjustedSalary(d, role) {
+  if (role === 'reserve') return Math.round((0.1 + Math.random() * 0.1) * 1000) / 1000;
+  return estimateSalary(d);
 }
 
 function estimateSalary(d) {
@@ -669,7 +705,7 @@ function driverInterest(driver, team, career) {
   return clamp(interest, 0.06, 0.85);
 }
 
-function negotiateContract(driver, team, career, offerSalary, offerYears) {
+function negotiateContract(driver, team, career, offerSalary, offerYears, targetRole) {
   if (driver.cooldownUntilRaceSeq && career.raceSequence < driver.cooldownUntilRaceSeq) {
     return { accepted: false, cooldown: true, message: `${driver.name} pediu um tempo — só volte a propor após a próxima corrida.` };
   }
@@ -681,7 +717,7 @@ function negotiateContract(driver, team, career, offerSalary, offerYears) {
       return { accepted: false, notInterested: true, message: `${driver.name} não demonstrou interesse em sair${rivalName ? ' de ' + rivalName : ''} agora.` };
     }
   }
-  const base = estimateSalary(driver);
+  const base = targetRole === 'reserve' ? clamp(estimateSalary(driver) * 0.22, 0.1, 0.2) : estimateSalary(driver);
   const prestige = clamp((effectivePaceReliability(team).carPace - 74) / (97 - 74), 0, 1);
   let expected = base * (1.3 - prestige * 0.3);
   if (driver.pace >= 8 && prestige < 0.4) expected *= 1.15;
@@ -694,13 +730,15 @@ function negotiateContract(driver, team, career, offerSalary, offerYears) {
   return { accepted: false, counterOffer: counter };
 }
 
+const ROOKIE_NAT_POOL = ['GB', 'BR', 'FR', 'DE', 'IT', 'ES', 'AU', 'NL', 'US', 'JP', 'CA', 'MX', 'FI', 'DK', 'NZ', 'BE', 'AT'];
+
 function generateRookie(teamId, driverPool) {
   const first = pick(NAME_POOL_FIRST);
   const last = pick(NAME_POOL_LAST);
   let code = last.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
   while (driverPool && driverPool[code]) code = code.slice(0, 2) + String(randInt(0, 9));
   return {
-    code, name: `${first} ${last}`, age: randInt(18, 21), teamId, role: null, retired: false,
+    code, name: `${first} ${last}`, age: randInt(18, 21), teamId, role: null, retired: false, nat: pick(ROOKIE_NAT_POOL),
     experience: 1, carFeel: randInt(4, 6), wet: randInt(4, 6), overtaking: randInt(4, 6),
     starts: randInt(3, 5), focus: randInt(4, 6), physical: randInt(6, 8), pace: randInt(5, 7),
     contractYears: randInt(2, 3),
@@ -764,7 +802,9 @@ function deriveTeamsListFromCareer(career) {
   });
 }
 
-function initCareerState(playerTeamId) {
+function initCareerState(playerTeamId, startYear) {
+  const year = startYear || 2026;
+  const ageShift = 2026 - year;
   const teams = {};
   const driverPool = {};
   TEAMS.forEach(team => {
@@ -776,15 +816,16 @@ function initCareerState(playerTeamId) {
       basePace: team.carPace, baseReliability: team.reliability,
       devLevels: dev.devLevels, devLevelsStart: dev.devLevelsStart, devInvest: dev.devInvest,
       budget, sponsorDeals: [], engineSupplierId: supplier ? supplier.id : 'mercedes',
-      engineContractYears: randInt(1, 3),
+      pendingEngineSupplierId: supplier ? supplier.id : 'mercedes', engineConfirmedThisSeason: false,
+      engineContractYears: 1,
       driverCodes: team.drivers.map(d => d.code),
     };
     team.drivers.forEach(d => {
-      driverPool[d.code] = { ...d, teamId: team.id, retired: false, salary: estimateSalary(d), contractYears: randInt(1, 3), happiness: randInt(58, 78), lastTalkRaceSeq: -99 };
+      driverPool[d.code] = { ...d, age: Math.max(17, d.age - ageShift), teamId: team.id, retired: false, salary: roleAdjustedSalary(d, d.role), contractYears: randInt(1, 3), happiness: randInt(58, 78), lastTalkRaceSeq: -99 };
     });
   });
   F2_FREE_AGENTS.forEach(d => {
-    driverPool[d.code] = { ...d, teamId: null, role: null, retired: false, salary: estimateSalary(d), contractYears: 0, cooldownUntilRaceSeq: 0, happiness: randInt(58, 78), lastTalkRaceSeq: -99 };
+    driverPool[d.code] = { ...d, age: Math.max(17, d.age - ageShift), teamId: null, role: null, retired: false, salary: estimateSalary(d), contractYears: 0, cooldownUntilRaceSeq: 0, happiness: randInt(58, 78), lastTalkRaceSeq: -99 };
   });
   Object.keys(driverPool).forEach(code => { if (driverPool[code].cooldownUntilRaceSeq == null) driverPool[code].cooldownUntilRaceSeq = 0; });
 
@@ -793,8 +834,8 @@ function initCareerState(playerTeamId) {
   Object.keys(teams).forEach(id => { constructorStandings[id] = 0; });
 
   return {
-    year: 2026, playerTeamId, managerName: null, teams, driverPool, driverStandings, constructorStandings,
-    calendar: buildCalendarForYear(2026), roundIndex: 0, seasonHistory: [], raceSequence: 0,
+    year, playerTeamId, managerName: null, teams, driverPool, driverStandings, constructorStandings,
+    calendar: buildCalendarForYear(year), roundIndex: 0, seasonHistory: [], raceSequence: 0,
     log: ['Bem-vindo à Pitwall Manager! Temporada 2026 pronta para começar.'],
   };
 }
@@ -815,6 +856,41 @@ function applyCareerRaceResults(career, finalCars) {
     }
   });
   return { newDriverStandings, newConstructorStandings, pointsAwarded };
+}
+
+function maybeGenerateAiTransferNews(career) {
+  if (Math.random() > 0.22) return null;
+  const driverPool = career.driverPool;
+  const teams = career.teams;
+  const aiTeamIds = Object.keys(teams).filter(id => id !== career.playerTeamId);
+  const shuffled = aiTeamIds.sort(() => Math.random() - 0.5);
+  for (const teamId of shuffled) {
+    const team = teams[teamId];
+    const alreadyHasPendingSigning = Object.values(driverPool).some(d => d.pendingTeamId === teamId);
+    if (alreadyHasPendingSigning) continue;
+    const teamPrestige = effectivePaceReliability(team).carPace;
+    const raceSeats = ['race1', 'race2'].map(role => {
+      const d = Object.values(driverPool).find(x => x.teamId === teamId && x.role === role && !x.pendingTeamId);
+      return d ? { role, driver: d } : null;
+    }).filter(Boolean);
+    if (!raceSeats.length) continue;
+    const weakestSeat = raceSeats.sort((a, b) => a.driver.pace - b.driver.pace)[0];
+    const candidates = Object.values(driverPool).filter(d => {
+      if (d.retired || d.pendingTeamId || d.code === weakestSeat.driver.code) return false;
+      if (d.teamId === career.playerTeamId) return false;
+      if (d.teamId === teamId) return false;
+      if (!d.teamId) return true;
+      if (d.role !== 'race1' && d.role !== 'race2') return false;
+      const theirPrestige = teams[d.teamId] ? effectivePaceReliability(teams[d.teamId]).carPace : 70;
+      return theirPrestige < teamPrestige - 3;
+    });
+    if (!candidates.length) continue;
+    candidates.sort((a, b) => b.pace - a.pace);
+    const target = candidates[0];
+    if (target.pace <= weakestSeat.driver.pace + 0.5) continue;
+    return { code: target.code, name: target.name, teamId, teamShort: team.short, role: weakestSeat.role, nextYear: career.year + 1 };
+  }
+  return null;
 }
 
 function processOffseason(career) {
@@ -863,6 +939,26 @@ function processOffseason(career) {
   });
 
   let freeAgents = Object.values(driverPool).filter(d => !d.retired && !d.teamId);
+
+  // ---- aplica as transferências anunciadas durante a temporada (silly season) ----
+  Object.values(driverPool).forEach(d => {
+    if (d.retired || !d.pendingTeamId) return;
+    const destTeamId = d.pendingTeamId;
+    const destRole = d.pendingRole;
+    if (!teams[destTeamId]) { d.pendingTeamId = null; d.pendingRole = null; return; }
+    const oldTeamId = d.teamId;
+    const oldRole = d.role;
+    if (oldTeamId && oldTeamId !== destTeamId) openSeats.push({ teamId: oldTeamId, role: oldRole, fromCode: d.code });
+    d.teamId = destTeamId;
+    d.role = destRole;
+    d.contractYears = randInt(1, 3);
+    d.salary = roleAdjustedSalary(d, destRole);
+    d.pendingTeamId = null;
+    d.pendingRole = null;
+    log.push(`${d.name} chega à ${teams[destTeamId].short} para ${career.year + 1}, como combinado.`);
+  });
+  freeAgents = Object.values(driverPool).filter(d => !d.retired && !d.teamId);
+
   const seatsToFill = openSeats;
   seatsToFill.sort((a, b) => {
     const rp = (r) => (r === 'reserve' ? 0 : 1);
@@ -878,10 +974,11 @@ function processOffseason(career) {
     let hire;
     if (freeAgents.length && Math.random() < 0.6) {
       hire = freeAgents.shift();
+      hire.salary = roleAdjustedSalary(hire, seat.role);
       log.push(`${hire.name} assina com ${teams[seat.teamId].short} (${roleLabel(seat.role)}).`);
     } else {
       hire = generateRookie(seat.teamId, driverPool);
-      hire.salary = estimateSalary(hire);
+      hire.salary = roleAdjustedSalary(hire, seat.role);
       driverPool[hire.code] = hire;
       log.push(`Estreante ${hire.name} (${hire.age} anos) assina com ${teams[seat.teamId].short}.`);
     }
@@ -906,8 +1003,24 @@ function processOffseason(career) {
         t.devLevels[c.id] = clamp(t.devLevels[c.id] + growth, 25, 99);
       });
     }
-    t.engineContractYears = Math.max(0, (t.engineContractYears || 1) - 1);
+    t.engineSupplierId = t.pendingEngineSupplierId || t.engineSupplierId;
+    t.engineConfirmedThisSeason = false;
+    t.engineContractYears = 1;
   });
+
+  const playerTeam = teams[career.playerTeamId];
+  if (playerTeam && playerTeam.budget < 0) {
+    const bailout = Math.round((Math.abs(playerTeam.budget) + 2) * 100) / 100;
+    playerTeam.budget += bailout;
+    playerTeam.consecutiveBailouts = (playerTeam.consecutiveBailouts || 0) + 1;
+    if (playerTeam.consecutiveBailouts >= 3) {
+      log.push(`⚠️ Um investidor injetou ${fmtMoney(bailout)} para a equipe continuar competindo — mas esse já é o ${playerTeam.consecutiveBailouts}º ano seguido no vermelho. Se o financeiro não melhorar, a equipe corre risco real de falência.`);
+    } else {
+      log.push(`⚠️ Fim de temporada no vermelho: um investidor injetou ${fmtMoney(bailout)} para a equipe continuar competindo. Se esse problema financeiro continuar, a equipe pode falir.`);
+    }
+  } else if (playerTeam) {
+    playerTeam.consecutiveBailouts = 0;
+  }
 
   const newDriverStandings = {}; Object.values(driverPool).forEach(d => { if (!d.retired) newDriverStandings[d.code] = 0; });
   const newConstructorStandings = {}; Object.keys(teams).forEach(id => { newConstructorStandings[id] = 0; });
@@ -939,9 +1052,10 @@ function ensureTwoRaceDrivers(teams, driverPool, excludeCode) {
       let hire;
       if (freeAgents.length) {
         hire = freeAgents[0];
+        hire.salary = roleAdjustedSalary(hire, role);
       } else {
         hire = generateRookie(id, dp);
-        hire.salary = estimateSalary(hire);
+        hire.salary = roleAdjustedSalary(hire, role);
       }
       dp = { ...dp, [hire.code]: { ...hire, teamId: id, role, contractYears: hire.contractYears || randInt(1, 3) } };
     });
@@ -964,6 +1078,8 @@ function sponsorsCurrentlyActive(career) {
 }
 
 function maybeGenerateSponsorOffer(career) {
+  const team = career.teams[career.playerTeamId];
+  if (team && (team.sponsorDeals || []).length >= 5) return null;
   if (Math.random() > 0.32) return null;
   const taken = sponsorsCurrentlyActive(career);
   const pool = SPONSORS.filter(s => !taken.has(s.id));
@@ -1046,8 +1162,13 @@ function reducer(state, action) {
 
     // ---- carreira ----
     case 'CAREER_SELECT_TEAM': {
-      const career = initCareerState(action.teamId);
+      const career = initCareerState(action.teamId, action.year || 2026);
       return { ...state, mode: 'career', playerTeamId: action.teamId, career, phase: 'career-name' };
+    }
+    case 'SET_START_YEAR': {
+      if (!state.career) return state;
+      const career = initCareerState(state.playerTeamId, action.year);
+      return { ...state, career };
     }
     case 'CAREER_GOTO':
       return { ...state, phase: 'career-' + action.screen, contractUI: { targetCode: null, salary: 0, years: 1, targetRole: null, lastCounter: null, lastMessage: null } };
@@ -1075,7 +1196,13 @@ function reducer(state, action) {
     case 'CAREER_CONTINUE': {
       const career = state.career;
       if (career.roundIndex + 1 < career.calendar.length) {
-        const advanced = { ...career, roundIndex: career.roundIndex + 1 };
+        let advanced = { ...career, roundIndex: career.roundIndex + 1 };
+        const news = maybeGenerateAiTransferNews(advanced);
+        if (news) {
+          const driverPool = { ...advanced.driverPool, [news.code]: { ...advanced.driverPool[news.code], pendingTeamId: news.teamId, pendingRole: news.role } };
+          const log = [...advanced.log, `Silly season: ${news.name} vai correr pela ${news.teamShort} em ${news.nextYear}.`].slice(-40);
+          advanced = { ...advanced, driverPool, log };
+        }
         const offer = maybeGenerateSponsorOffer(advanced);
         if (offer) return { ...state, career: advanced, phase: 'career-sponsor-offer', pendingSponsorOffer: offer, careerLastRaceApplied: null };
         return { ...state, career: advanced, phase: 'career-hub', careerLastRaceApplied: null };
@@ -1100,6 +1227,8 @@ function reducer(state, action) {
     case 'DECLINE_SPONSOR_OFFER':
       return { ...state, pendingSponsorOffer: null, phase: 'career-hub' };
 
+    case 'CONTRACT_DRAFT_CANCEL':
+      return { ...state, contractUI: { targetCode: null, salary: 0, years: 1, targetRole: null, lastCounter: null, lastMessage: null } };
     case 'CONTRACT_DRAFT_START': {
       const d = state.career.driverPool[action.code];
       if (!d) return state;
@@ -1125,7 +1254,8 @@ function reducer(state, action) {
       const salary = draft.salary || estimateSalary(driver);
       const years = draft.years || 2;
       const team = career.teams[state.playerTeamId];
-      const result = negotiateContract(driver, team, career, salary, years);
+      const targetRoleForNegotiation = draft.targetRole || driver.role || 'reserve';
+      const result = negotiateContract(driver, team, career, salary, years, targetRoleForNegotiation);
       if (result.cooldown) {
         return { ...state, contractUI: { ...draft, targetCode: action.code, lastCounter: null, lastMessage: result.message } };
       }
@@ -1135,16 +1265,18 @@ function reducer(state, action) {
         return { ...state, career: { ...career, driverPool }, contractUI: { ...draft, targetCode: action.code, lastCounter: result.counterOffer || null, lastMessage: msg } };
       }
       const targetRole = draft.targetRole || driver.role || 'reserve';
+      const isRenewal = driver.teamId === state.playerTeamId;
+      const finalYears = isRenewal ? (driver.contractYears || 0) + years : years;
       const currentHolderCode = team.driverCodes.find(c => c !== action.code && career.driverPool[c] && career.driverPool[c].role === targetRole);
       let driverPool = { ...career.driverPool };
       if (currentHolderCode) driverPool[currentHolderCode] = { ...driverPool[currentHolderCode], teamId: null, role: null, contractYears: 0 };
-      driverPool[action.code] = { ...driver, salary, contractYears: years, teamId: state.playerTeamId, role: targetRole, cooldownUntilRaceSeq: 0 };
+      driverPool[action.code] = { ...driver, salary, contractYears: finalYears, teamId: state.playerTeamId, role: targetRole, cooldownUntilRaceSeq: 0 };
       const safe = ensureTwoRaceDrivers(career.teams, driverPool, action.code);
       const teams = { ...safe.teams, [state.playerTeamId]: { ...safe.teams[state.playerTeamId], driverCodes: Object.values(safe.driverPool).filter(d => d.teamId === state.playerTeamId && !d.retired).map(d => d.code) } };
       const log = currentHolderCode
         ? [...career.log, `${driver.name} assina com a equipe (${roleLabel(targetRole)}). ${driverPool[currentHolderCode].name} fica livre no mercado.`].slice(-40)
         : [...career.log, `${driver.name} assina com a equipe (${roleLabel(targetRole)}).`].slice(-40);
-      return { ...state, career: { ...career, driverPool: safe.driverPool, teams, log }, contractUI: { targetCode: action.code, salary, years, targetRole, lastCounter: null, lastMessage: `${driver.name} aceitou: ${fmtMoney(salary)}/corrida, contrato de ${years} ano(s).` } };
+      return { ...state, career: { ...career, driverPool: safe.driverPool, teams, log }, contractUI: { targetCode: action.code, salary, years, targetRole, lastCounter: null, lastMessage: `${driver.name} aceitou: ${fmtMoney(salary)}/corrida${isRenewal ? `, agora ${finalYears} ano(s) ao todo` : `, contrato de ${finalYears} ano(s)`}.` } };
     }
 
     case 'ADJUST_DEV_INVEST': {
@@ -1165,13 +1297,23 @@ function reducer(state, action) {
       return { ...state, career: { ...career, teams } };
     }
 
-    case 'SET_ENGINE_SUPPLIER': {
+    case 'SELECT_ENGINE_SUPPLIER': {
       const career = state.career;
       const team = career.teams[state.playerTeamId];
-      const switchCost = team.engineSupplierId === action.supplierId ? 0 : 10;
-      if (team.budget < switchCost) return state;
-      const teams = { ...career.teams, [state.playerTeamId]: { ...team, budget: team.budget - switchCost, engineSupplierId: action.supplierId, engineContractYears: 3 } };
+      const teams = { ...career.teams, [state.playerTeamId]: { ...team, pendingEngineSupplierId: action.supplierId } };
       return { ...state, career: { ...career, teams } };
+    }
+    case 'CONFIRM_ENGINE_SUPPLIER': {
+      const career = state.career;
+      const team = career.teams[state.playerTeamId];
+      if (team.engineConfirmedThisSeason) return state;
+      const supplier = ENGINE_SUPPLIERS.find(e => e.id === team.pendingEngineSupplierId);
+      if (!supplier) return state;
+      const cost = supplier.costPerYear;
+      if (team.budget < cost) return state;
+      const log = [...career.log, `Motor confirmado para a próxima temporada: ${supplier.name} (−${fmtMoney(cost)}).`].slice(-40);
+      const teams = { ...career.teams, [state.playerTeamId]: { ...team, budget: team.budget - cost, engineConfirmedThisSeason: true } };
+      return { ...state, career: { ...career, teams, log } };
     }
 
     // ---- simulação (compartilhada corrida rápida / carreira) ----
@@ -1212,10 +1354,11 @@ function reducer(state, action) {
       const result = simulateLap({ ...state, lap });
       const finished = lap >= state.totalLaps;
       const eventLog = [...state.eventLog, ...result.events].slice(-90);
+      const weatherChanged = state.weather && result.newWeather && state.weather.condition !== result.newWeather.condition;
       let nextState = {
         ...state, grid: result.finalCars, weather: result.newWeather, flag: result.newFlag,
         flagLapsRemaining: result.newFlagLapsRemaining, prevPositions: result.newPrevPositions, eventLog, lap,
-        autoPlay: finished ? false : state.autoPlay,
+        autoPlay: finished ? false : (weatherChanged ? false : state.autoPlay),
         history: [...state.history, buildHistoryPoint(lap, result.finalCars, state.playerCarIds)].slice(-100),
       };
       if (finished) {
@@ -1319,6 +1462,12 @@ function skillBar(label, value) {
 }
 
 /* ---------------- componentes da corrida ---------------- */
+
+function flagFor(nat) {
+  if (!nat || nat.length !== 2) return '🏳️';
+  const points = [...nat.toUpperCase()].map(c => 127397 + c.charCodeAt(0));
+  return String.fromCodePoint(...points);
+}
 
 function teamBadge(team, size) {
   const s = size || 40;
@@ -1489,7 +1638,7 @@ function renderTutorialScreen(state) {
     {
       title: '🛞 Pneus',
       body: 'Antes de cada corrida você escolhe o composto de largada. Macio é rápido mas gasta rápido (16-18 voltas); duro dura mais (33-38) mas é mais lento. Se passar do limite de desgaste, o pneu pode estourar — fique de olho na barra.',
-      visual: `<div class="flex items-center gap-2 justify-center mt-3">${compoundDot('soft')}${wearBar('soft', 20, 'w-16')}<span class="cm-mono text-xs text-slate-500 ml-2">S</span>${compoundDot('hard')}${wearBar('hard', 70, 'w-16')}<span class="cm-mono text-xs text-slate-500 ml-2">D</span></div>`,
+      visual: `<div class="flex items-center gap-2 justify-center mt-3 flex-wrap">${compoundDot('soft')}${wearBar('soft', 20, 'w-14')}<span class="cm-mono text-xs text-slate-500 ml-1 mr-2">S</span>${compoundDot('medium')}${wearBar('medium', 45, 'w-14')}<span class="cm-mono text-xs text-slate-500 ml-1 mr-2">M</span>${compoundDot('hard')}${wearBar('hard', 70, 'w-14')}<span class="cm-mono text-xs text-slate-500 ml-1">D</span></div>`,
     },
     {
       title: '⏱️ Ritmo e pit stops',
@@ -1533,6 +1682,7 @@ function renderCareerNameScreen(state) {
   const team = TEAMS.find(t => t.id === state.playerTeamId);
   return `
     <div class="h-full flex flex-col items-center justify-center p-6 text-center">
+      <button data-action="${act({ type: 'GOTO', phase: 'career-team' })}" class="cm-body text-sm text-slate-400 self-start mb-4">← Voltar</button>
       ${team ? teamBadge(team, 56) : ''}
       <div class="cm-display text-2xl font-bold text-slate-100 mt-4 mb-1">Qual é o seu nome, chefe de equipe?</div>
       <p class="cm-body text-sm text-slate-400 max-w-xs mb-6">Você vai comandar a ${team ? team.name : 'equipe'} a partir de agora.</p>
@@ -1551,11 +1701,8 @@ function renderMenuScreen() {
     </button>
   ` : '';
   return `
-    <div class="h-full overflow-y-auto flex flex-col items-center justify-center p-6 text-center">
-      <div class="cm-mono text-xs text-cyan-400 mb-2">TEMPORADA 2026 · EDIÇÃO NÃO OFICIAL DE FÃ</div>
-      <h1 class="cm-display text-4xl font-bold text-slate-100 mb-1">PIT<span class="text-amber-400">WALL</span> MANAGER</h1>
-      <div class="cm-mono text-sm text-slate-500 mb-6">sistema de telemetria online<span class="cm-cursor">_</span></div>
-      <p class="cm-body text-sm text-slate-400 max-w-xs mb-8">Sem volante, sem gráficos 3D. Você é o chefe de equipe: estratégia de pista, contratos, patrocínios e upgrades — até 2040.</p>
+    <div class="h-full overflow-y-auto flex flex-col items-center justify-center p-6 text-center" style="background-color:#000;">
+      <h1 class="cm-splash text-4xl font-black text-slate-100 mb-10 tracking-wide">PITWALL<br>MANAGER <span class="text-amber-400">26</span></h1>
       ${continueBtn}
       <button data-action="${act({ type: 'GOTO', phase: 'mode' })}" class="${save ? 'bg-slate-800 border border-slate-700 text-slate-200' : 'bg-amber-500 text-slate-950'} cm-body font-semibold px-6 py-3 rounded-md w-full max-w-xs">${save ? 'Novo jogo' : 'Começar'}</button>
     </div>
@@ -1565,6 +1712,7 @@ function renderMenuScreen() {
 function renderModeScreen() {
   return `
     <div class="h-full overflow-y-auto p-4 flex flex-col justify-center">
+      <button data-action="${act({ type: 'GOTO', phase: 'menu' })}" class="cm-body text-sm text-slate-400 mb-3 self-start">← Voltar</button>
       <div class="cm-mono text-xs text-slate-500 mb-3 text-center">ESCOLHA O MODO DE JOGO</div>
       <button data-action="${act({ type: 'GOTO', phase: 'career-team' })}" class="text-left bg-slate-900 border border-slate-800 rounded-lg p-4 mb-3 hover:border-cyan-500">
         <div class="cm-display text-xl font-bold text-slate-100 mb-1">📋 Modo Carreira</div>
@@ -1645,8 +1793,11 @@ function renderQualiScreen(state) {
         <div class="cm-mono text-xs ${wet ? 'text-cyan-300' : 'text-amber-300'} mb-3">${wet ? '🌧 previsão de chuva na largada' : '☀️ previsão de pista seca'}</div>
       </div>
       <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto">
+        <div class="border-2 border-amber-500 rounded-md p-2.5 mb-3 bg-slate-900">
+          <div class="cm-mono text-xs text-amber-400 mb-2">🛞 ESCOLHA O PNEU DE LARGADA</div>
+          ${tirePicker}
+        </div>
         <div class="bg-slate-900 border border-slate-800 rounded-md mb-3">${rows}</div>
-        ${tirePicker}
       </div>
       <div class="shrink-0 pt-2">
         <button data-action="${act({ type: 'START_RACE' })}" class="w-full bg-amber-500 text-slate-950 cm-body font-semibold py-3 rounded-md">Ir para a corrida</button>
@@ -1738,6 +1889,7 @@ function renderCareerTeamSelectScreen() {
   return `
     <div class="h-full flex flex-col p-3 sm:p-4 overflow-hidden">
       <div class="shrink-0">
+        <button data-action="${act({ type: 'GOTO', phase: 'mode' })}" class="cm-body text-sm text-slate-400 mb-2">← Voltar</button>
         <div class="cm-mono text-xs text-slate-500 mb-1">MODO CARREIRA · 2026 → 2040</div>
         <h2 class="cm-display text-2xl font-bold mb-1">Escolha sua equipe</h2>
         <p class="cm-body text-xs text-slate-500 mb-3">Contratos, patrocínios, upgrades e o mercado de pilotos ao longo de 15 temporadas.</p>
@@ -1745,6 +1897,10 @@ function renderCareerTeamSelectScreen() {
       <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 content-start pb-2">${TEAMS.map(t => renderTeamCard(t, 'CAREER_SELECT_TEAM')).join('')}</div>
     </div>
   `;
+}
+
+function footerBackButton() {
+  return `<div class="shrink-0 p-2.5 safe-bottom"><button data-action="${act({ type: 'CAREER_GOTO', screen: 'hub' })}" class="w-full bg-slate-800 border border-slate-700 rounded-md py-2.5 cm-body text-sm text-slate-300">← Voltar</button></div>`;
 }
 
 function careerHeader(state, title) {
@@ -1771,9 +1927,8 @@ function renderCareerHubScreen(state) {
   const myConstructorPos = constructorRank.findIndex(([id]) => id === state.playerTeamId) + 1;
   const navBtns = [
     { screen: 'calendar', icon: '📅', label: 'Calendário' }, { screen: 'standings', icon: '🏆', label: 'Classificação' },
-    { screen: 'contracts', icon: '📝', label: 'Contratos' }, { screen: 'market', icon: '🔄', label: 'Mercado' },
-    { screen: 'upgrades', icon: '🔧', label: 'Upgrades' }, { screen: 'sponsors', icon: '💰', label: 'Patrocínios' },
-    { screen: 'roster', icon: '🏎️', label: 'Elenco' },
+    { screen: 'market', icon: '🔄', label: 'Mercado' }, { screen: 'upgrades', icon: '🔧', label: 'Upgrades' },
+    { screen: 'sponsors', icon: '💰', label: 'Patrocínios' }, { screen: 'roster', icon: '🏎️', label: 'Elenco' },
   ].map(b => `
     <button data-action="${act({ type: 'CAREER_GOTO', screen: b.screen })}" class="bg-slate-900 border border-slate-800 rounded-md p-3 text-center hover:border-slate-600">
       <div class="text-xl mb-1">${b.icon}</div><div class="cm-body text-xs text-slate-300">${b.label}</div>
@@ -1815,7 +1970,7 @@ function renderCareerCalendarScreen(state) {
       </div>
     `;
   }).join('');
-  return `<div class="h-full flex flex-col overflow-hidden">${careerHeader(state, 'Calendário')}<div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto bg-slate-900 m-3 rounded-md border border-slate-800">${rows}</div></div>`;
+  return `<div class="h-full flex flex-col overflow-hidden">${careerHeader(state, 'Calendário')}<div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto bg-slate-900 m-3 rounded-md border border-slate-800">${rows}</div>${footerBackButton()}</div>`;
 }
 
 function renderCareerStandingsScreen(state) {
@@ -1853,6 +2008,41 @@ function renderCareerStandingsScreen(state) {
         <div><div class="cm-mono text-xs text-slate-500 mb-1">PILOTOS</div><div class="bg-slate-900 border border-slate-800 rounded-md overflow-hidden">${driverRows}</div></div>
         <div><div class="cm-mono text-xs text-slate-500 mb-1">CONSTRUTORES</div><div class="bg-slate-900 border border-slate-800 rounded-md overflow-hidden">${constructorRows}</div></div>
       </div>
+      ${footerBackButton()}
+    </div>
+  `;
+}
+
+function contractDraftPanelLight(draft, code, showRolePicker) {
+  const rolePicker = showRolePicker ? `
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-xs text-gray-700">Contratar para</span>
+      <div class="flex gap-1">
+        ${['race1', 'race2', 'reserve'].map(r => `<button data-action="${act({ type: 'CONTRACT_DRAFT_SET_ROLE', role: r })}" class="text-xs px-2 py-1 rounded border ${draft.targetRole === r ? 'team-btn team-border' : 'bg-white border-gray-400 text-gray-700'}">${roleLabel(r)}</button>`).join('')}
+      </div>
+    </div>
+  ` : '';
+  return `
+    <div>
+      ${rolePicker}
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs text-gray-700">Salário/corrida</span>
+        <div class="flex items-center gap-2">
+          <button data-action="${act({ type: 'CONTRACT_DRAFT_ADJUST', field: 'salary', delta: -0.05 })}" class="bg-white border border-gray-400 rounded w-7 h-7 text-gray-700">−</button>
+          <span class="text-sm font-semibold w-16 text-center team-text">${fmtMoney(draft.salary || 0)}</span>
+          <button data-action="${act({ type: 'CONTRACT_DRAFT_ADJUST', field: 'salary', delta: 0.05 })}" class="bg-white border border-gray-400 rounded w-7 h-7 text-gray-700">+</button>
+        </div>
+      </div>
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs text-gray-700">Anos de contrato</span>
+        <div class="flex items-center gap-2">
+          <button data-action="${act({ type: 'CONTRACT_DRAFT_ADJUST', field: 'years', delta: -1 })}" class="bg-white border border-gray-400 rounded w-7 h-7 text-gray-700">−</button>
+          <span class="text-sm text-gray-900 w-16 text-center">${draft.years || 1}</span>
+          <button data-action="${act({ type: 'CONTRACT_DRAFT_ADJUST', field: 'years', delta: 1 })}" class="bg-white border border-gray-400 rounded w-7 h-7 text-gray-700">+</button>
+        </div>
+      </div>
+      <button data-action="${act({ type: 'PROPOSE_CONTRACT', code })}" class="w-full text-sm font-semibold py-2 rounded team-btn">Propor contrato</button>
+      ${draft.lastMessage && draft.targetCode === code ? `<div class="text-xs ${draft.lastCounter || draft.lastMessage.toLowerCase().includes('não é possível') ? 'text-red-700' : 'text-emerald-700'} mt-2">${draft.lastMessage}</div>` : ''}
     </div>
   `;
 }
@@ -1939,80 +2129,160 @@ function renderCareerMarketScreen(state) {
   const draft = state.contractUI || {};
   const mine = new Set(career.teams[state.playerTeamId].driverCodes);
   const all = Object.values(career.driverPool).filter(d => !d.retired && !mine.has(d.code));
-  const free = all.filter(d => !d.teamId).sort((a, b) => b.pace - a.pace);
-  const expiring = all.filter(d => d.teamId && d.contractYears <= 1).sort((a, b) => b.pace - a.pace);
-  const locked = all.filter(d => d.teamId && d.contractYears > 1).sort((a, b) => b.pace - a.pace);
+  const withContract = all.filter(d => d.teamId).sort((a, b) => {
+    const tn = (id) => (career.teams[id] ? career.teams[id].name : '');
+    if (a.teamId !== b.teamId) return tn(a.teamId).localeCompare(tn(b.teamId));
+    const rp = (r) => (r === 'race1' ? 0 : r === 'race2' ? 1 : 2);
+    return rp(a.role) - rp(b.role);
+  });
+  const withoutContract = all.filter(d => !d.teamId).sort((a, b) => b.pace - a.pace);
+  const roleAbbrev = (r) => (r === 'race1' ? '1º' : r === 'race2' ? '2º' : 'T');
 
-  const negotiableCard = (d) => {
-    const isEditing = draft.targetCode === d.code;
+  const rows = (list) => list.map(d => {
     const team = d.teamId ? career.teams[d.teamId] : null;
-    const situationTxt = !team ? 'agente livre' : d.contractYears <= 1 ? 'último ano de contrato' : `contrato · ${d.contractYears} anos restantes`;
-    const onCooldown = d.cooldownUntilRaceSeq && career.raceSequence < d.cooldownUntilRaceSeq;
+    const selected = draft.targetCode === d.code;
+    const bg = team ? team.color : '#ffffff';
+    const txt = team ? (team.textOnPrimary || '#000000') : 'var(--tp-dark)';
     return `
-      <div class="bg-slate-900 border ${isEditing ? 'border-amber-500' : 'border-slate-800'} rounded-md p-3 mb-2">
-        <div class="flex items-center justify-between mb-1">
-          <button data-action="${act({ type: 'CAREER_VIEW_DRIVER', code: d.code })}" class="cm-display font-semibold text-slate-100 text-left">${d.name}</button>
-          ${team ? `<span class="cm-mono text-xs" style="color:${team.color}">${team.short}</span>` : '<span class="cm-mono text-xs text-emerald-400">LIVRE</span>'}
-        </div>
-        <div class="cm-body text-xs text-slate-400 mb-2">${d.age} anos · ritmo ${d.pace}/10 · ${situationTxt} · pede ~${fmtMoney(estimateSalary(d))}/corrida</div>
-        ${isEditing ? contractDraftPanel(draft, d.code, true) : `<button data-action="${act({ type: 'CONTRACT_DRAFT_START', code: d.code })}" ${onCooldown ? 'disabled' : ''} class="w-full ${onCooldown ? 'bg-slate-900 border border-slate-800 text-slate-600' : 'bg-slate-800 border border-slate-700 text-slate-300'} rounded-md py-1.5 cm-body text-xs">${onCooldown ? 'Aguardando resposta' : 'Negociar'}</button>`}
-      </div>
+      <tr data-action="${act({ type: 'CONTRACT_DRAFT_START', code: d.code })}" style="background-color:${bg}; color:${txt}; ${selected ? 'box-shadow: inset 0 0 0 2px var(--tp-dark);' : ''}">
+        <td class="px-1 py-1 text-center border-b border-gray-300" style="border-color:rgba(0,0,0,0.15)">${flagFor(d.nat)}</td>
+        <td class="px-1.5 py-1 font-semibold border-b whitespace-nowrap overflow-hidden text-ellipsis" style="border-color:rgba(0,0,0,0.15); max-width:0;">${d.name}</td>
+        <td class="px-1 py-1 text-center border-b" style="border-color:rgba(0,0,0,0.15)">${d.age}</td>
+        <td class="px-1 py-1 text-center border-b text-[10px] whitespace-nowrap" style="border-color:rgba(0,0,0,0.15)">${team ? `${team.short} - ${roleAbbrev(d.role)}` : '-'}</td>
+        <td class="px-1 py-1 text-center border-b text-[10px]" style="border-color:rgba(0,0,0,0.15)">-</td>
+      </tr>
     `;
-  };
+  }).join('');
+
+  const tableHead = `
+    <thead>
+      <tr class="bg-gray-100 text-gray-700 text-[10px] uppercase">
+        <th class="px-1 py-1.5 border-b-2 border-gray-400">Nac</th>
+        <th class="px-1.5 py-1.5 border-b-2 border-gray-400 text-left">Nome</th>
+        <th class="px-1 py-1.5 border-b-2 border-gray-400">Idade</th>
+        <th class="px-1 py-1.5 border-b-2 border-gray-400">Equipe</th>
+        <th class="px-1 py-1.5 border-b-2 border-gray-400">Próx.</th>
+      </tr>
+    </thead>
+  `;
+
+  const editingDriver = draft.targetCode ? career.driverPool[draft.targetCode] : null;
+  const onCooldown = editingDriver && editingDriver.cooldownUntilRaceSeq && career.raceSequence < editingDriver.cooldownUntilRaceSeq;
 
   return `
-    <div class="h-full flex flex-col overflow-hidden">
-      ${careerHeader(state, 'Mercado de Transferências')}
-      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">
-        <p class="cm-body text-xs text-slate-500 mb-3">Você pode sondar qualquer piloto do grid — mas ele só topa conversar se estiver interessado. Pilotos com contrato longo raramente têm interesse. Se recusar, espere a corrida seguinte para tentar de novo.</p>
-        <div class="cm-mono text-xs text-emerald-400 mb-1">AGENTES LIVRES (${free.length})</div>
-        ${free.length ? free.map(negotiableCard).join('') : '<div class="cm-body text-xs text-slate-600 mb-2">Nenhum agente livre no momento.</div>'}
-        <div class="cm-mono text-xs text-amber-400 mb-1 mt-3">ÚLTIMO ANO DE CONTRATO (${expiring.length})</div>
-        ${expiring.length ? expiring.map(negotiableCard).join('') : '<div class="cm-body text-xs text-slate-600 mb-2">Nenhum piloto nessa situação agora.</div>'}
-        <div class="cm-mono text-xs text-slate-500 mb-1 mt-3">SOB CONTRATO (${locked.length}) — pouco interesse, mas você pode tentar</div>
-        ${locked.length ? locked.map(negotiableCard).join('') : '<div class="cm-body text-xs text-slate-600">Nenhum piloto nessa situação.</div>'}
+    <div class="h-full flex flex-col overflow-hidden team-bg-tint">
+      <div class="shrink-0 px-3 pt-3 pb-2 team-bg-tint">
+        <h2 class="text-center font-bold text-xl underline team-text">Mercado de pilotos</h2>
       </div>
+      ${editingDriver ? `
+        <div class="shrink-0 mx-3 mb-2 p-3 border-2 rounded bg-white team-border">
+          <div class="font-semibold text-gray-900 mb-1">${editingDriver.name}</div>
+          ${onCooldown ? `<div class="text-xs text-red-700 mb-2">Já recusou recentemente — espere a próxima corrida.</div>` : contractDraftPanelLight(draft, draft.targetCode, true)}
+          <button data-action="${act({ type: 'CONTRACT_DRAFT_CANCEL' })}" class="w-full mt-2 text-xs text-gray-500 underline">fechar</button>
+        </div>
+      ` : ''}
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto px-3">
+        <div class="text-center font-semibold underline text-sm mb-1 team-text">Pilotos com contrato</div>
+        <div class="border border-gray-400 rounded overflow-hidden mb-4 bg-white">
+          <table class="w-full text-xs border-collapse table-fixed">
+            <colgroup><col style="width:13%"><col style="width:41%"><col style="width:15%"><col style="width:19%"><col style="width:12%"></colgroup>
+            ${tableHead}
+            <tbody>${rows(withContract)}</tbody>
+          </table>
+        </div>
+        <div class="text-center font-semibold underline text-sm mb-1 team-text">Pilotos sem contrato</div>
+        <div class="border border-gray-400 rounded overflow-hidden mb-4 bg-white">
+          <table class="w-full text-xs border-collapse table-fixed">
+            <colgroup><col style="width:13%"><col style="width:41%"><col style="width:15%"><col style="width:19%"><col style="width:12%"></colgroup>
+            ${tableHead}
+            <tbody>${rows(withoutContract)}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="shrink-0 p-2.5"><button data-action="${act({ type: 'CAREER_GOTO', screen: 'hub' })}" class="w-full font-semibold py-2.5 rounded team-btn">Voltar</button></div>
     </div>
   `;
+}
+
+function fmtMilBR(millions) {
+  const thousands = Math.round(millions * 1000);
+  return thousands.toLocaleString('pt-BR');
 }
 
 function renderCareerUpgradesScreen(state) {
   const career = state.career;
   const team = career.teams[state.playerTeamId];
-  const totalSpend = UPGRADE_CATEGORIES.reduce((sum, c) => sum + (team.devInvest[c.id] || 0), 0);
 
-  const rows = UPGRADE_CATEGORIES.map(c => {
+  const investRows = UPGRADE_CATEGORIES.map((c, i) => {
     const level = team.devLevels[c.id] != null ? team.devLevels[c.id] : DEV_BASELINE;
     const invest = team.devInvest[c.id] || 0;
-    const tone = level >= 80 ? '#3ECF6E' : level >= 60 ? '#FFB020' : '#E8383D';
+    const isLast = i === UPGRADE_CATEGORIES.length - 1;
     return `
-      <div class="bg-slate-900 border border-slate-800 rounded-md p-2.5 mb-2">
-        <div class="flex items-center justify-between mb-1">
-          <span class="cm-body text-sm text-slate-100">${c.icon} ${c.label}</span>
-          <span class="cm-mono text-sm" style="color:${tone}">${level.toFixed(0)}%</span>
-        </div>
-        <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden mb-2">
-          <div class="h-full rounded-full" style="width:${level}%; background-color:${tone}"></div>
-        </div>
-        <div class="flex items-center justify-between">
-          <span class="cm-body text-xs text-slate-500">Investimento/corrida ($ mil)</span>
-          <div class="flex items-center gap-1.5">
-            <button data-action="${act({ type: 'ADJUST_DEV_INVEST', category: c.id, delta: -0.05 })}" class="bg-slate-800 border border-slate-700 rounded w-7 h-7 cm-body text-slate-200 shrink-0">−</button>
-            <input type="number" inputmode="numeric" min="0" max="999" step="1" value="${Math.round(invest * 1000)}" data-dev-input="${c.id}" class="cm-mono text-sm text-amber-400 bg-slate-950 border border-slate-700 rounded w-16 text-center py-1">
-            <button data-action="${act({ type: 'ADJUST_DEV_INVEST', category: c.id, delta: 0.05 })}" class="bg-slate-800 border border-slate-700 rounded w-7 h-7 cm-body text-slate-200 shrink-0">+</button>
+      <div class="flex items-center justify-between py-1.5 ${isLast ? 'mt-1 pt-2 border-t border-gray-300' : ''}">
+        <span class="underline team-text">${c.label}:</span>
+        <div class="flex items-center gap-2">
+          <span class="text-gray-800">${level.toFixed(0)}%</span>
+          <span class="text-gray-500">/</span>
+          <span class="text-gray-800">$</span>
+          <div class="flex items-center border border-gray-400 rounded overflow-hidden bg-white">
+            <input type="number" inputmode="numeric" min="0" max="999" step="1" value="${Math.round(invest * 1000)}" data-dev-input="${c.id}" class="text-gray-900 text-center w-14 py-0.5 outline-none">
+            <div class="flex flex-col border-l border-gray-400">
+              <button data-action="${act({ type: 'ADJUST_DEV_INVEST', category: c.id, delta: 0.05 })}" class="px-1 text-[9px] leading-none py-0.5 bg-gray-100 border-b border-gray-400">▲</button>
+              <button data-action="${act({ type: 'ADJUST_DEV_INVEST', category: c.id, delta: -0.05 })}" class="px-1 text-[9px] leading-none py-0.5 bg-gray-100">▼</button>
+            </div>
           </div>
+          <span class="text-gray-600 text-xs">mil</span>
         </div>
       </div>
     `;
   }).join('');
 
+  const activeSupplier = ENGINE_SUPPLIERS.find(e => e.id === team.engineSupplierId);
+  const pendingSupplier = ENGINE_SUPPLIERS.find(e => e.id === team.pendingEngineSupplierId) || activeSupplier;
+  const engineRows = ENGINE_SUPPLIERS.map(e => {
+    const isPending = e.id === team.pendingEngineSupplierId;
+    return `
+      <tr data-action="${act({ type: 'SELECT_ENGINE_SUPPLIER', supplierId: e.id })}" class="${isPending ? 'team-bg-tint2' : 'bg-white'} border-b border-gray-300">
+        <td class="pl-2 py-1.5"><span class="inline-block w-3 h-3 rounded-full border-2" style="${isPending ? 'border-color:var(--tp-dark); background-color:var(--tp-dark);' : 'border-color:#9ca3af;'}"></span></td>
+        <td class="py-1.5 underline team-text">${e.name}</td>
+        <td class="py-1.5 text-center text-gray-800">${e.power * 10}%</td>
+        <td class="py-1.5 text-right pr-1 text-gray-800">$ ${fmtMilBR(e.costPerYear)} mil</td>
+        <td class="py-1.5 text-center pr-2 text-gray-800">Sim</td>
+      </tr>
+    `;
+  }).join('');
+
   return `
-    <div class="h-full flex flex-col overflow-hidden">
-      ${careerHeader(state, 'Upgrades')}
-      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">
-        <p class="cm-body text-xs text-slate-500 mb-3">Quanto mais você investe por corrida em cada área, mais rápido ela evolui — com retorno decrescente perto de 100%. O valor é descontado do orçamento a cada corrida, esteja você jogando ou não.</p>
-        ${rows}
-        <div class="cm-body text-xs text-slate-300 mt-2">Total investido por corrida: <span class="text-amber-400 font-semibold">${fmtMoney(totalSpend)}</span> · Orçamento: <span class="text-amber-400">${fmtMoney(team.budget)}</span></div>
+    <div class="h-full flex flex-col overflow-hidden team-bg-tint">
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto">
+        <div class="px-4 pt-4">
+          <h2 class="text-center font-bold text-2xl underline mb-1 team-text">Investimentos</h2>
+          <div class="text-center italic underline text-sm mb-3 team-text">Gastos por corrida</div>
+          <div class="bg-white border border-gray-300 rounded p-3 mb-2">${investRows}</div>
+          <div class="text-right text-xs text-gray-600 mb-4">Orçamento: <span class="font-semibold text-gray-900">${fmtMoney(team.budget)}</span></div>
+        </div>
+        <div class="px-4">
+          <h2 class="text-center font-bold text-2xl underline mb-3 team-text">Motores</h2>
+          <div class="border border-gray-400 rounded overflow-hidden mb-2 bg-white">
+            <table class="w-full text-xs border-collapse">
+              <thead><tr class="bg-gray-100 text-gray-700 text-[10px] uppercase">
+                <th class="py-1.5"></th><th class="py-1.5 text-left pl-0">Fabricante</th><th class="py-1.5">Potência</th><th class="py-1.5 text-right pr-1">Valor</th><th class="py-1.5">Apto</th>
+              </tr></thead>
+              <tbody>${engineRows}</tbody>
+            </table>
+          </div>
+          <div class="bg-white border border-gray-300 rounded p-2.5 mb-3 text-sm">
+            <div class="flex justify-between py-0.5"><span class="underline team-text">Fabricante atual:</span><span class="text-gray-900">${activeSupplier ? activeSupplier.name : '—'}</span></div>
+            <div class="flex justify-between py-0.5"><span class="underline team-text">Confirmado p/ próxima:</span><span class="text-gray-900">${team.engineConfirmedThisSeason && pendingSupplier ? pendingSupplier.name : '—'}</span></div>
+            <div class="flex justify-between py-0.5 border-t border-gray-200 mt-1 pt-1"><span class="underline team-text">Caixa:</span><span class="text-gray-900 font-semibold">$ ${fmtMilBR(team.budget)} mil</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="shrink-0 p-2.5 space-y-1.5 team-bg-tint">
+        ${team.engineConfirmedThisSeason
+          ? `<div class="text-center text-xs text-emerald-700 pb-1">✓ Motor confirmado para a próxima temporada.</div>`
+          : `<button data-action="${act({ type: 'CONFIRM_ENGINE_SUPPLIER' })}" class="w-full font-semibold py-2.5 rounded team-btn">Fechar contrato — ${pendingSupplier ? fmtMoney(pendingSupplier.costPerYear) : ''}</button>`}
+        <button data-action="${act({ type: 'CAREER_GOTO', screen: 'hub' })}" class="w-full font-semibold py-2.5 rounded team-btn">Voltar</button>
       </div>
     </div>
   `;
@@ -2039,10 +2309,11 @@ function renderCareerSponsorsScreen(state) {
     <div class="h-full flex flex-col overflow-hidden">
       ${careerHeader(state, 'Patrocínios')}
       <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">
-        <p class="cm-body text-xs text-slate-500 mb-3">Você não escolhe os patrocinadores — as propostas chegam sozinhas durante a temporada e, uma vez assinadas, valem até o fim do contrato.</p>
-        <div class="cm-mono text-xs text-slate-500 mb-1">CONTRATOS ATIVOS (${deals.length})</div>
+        <p class="cm-body text-xs text-slate-500 mb-3">Você não escolhe os patrocinadores — as propostas chegam sozinhas durante a temporada e, uma vez assinadas, valem até o fim do contrato. Máximo de 5 patrocínios ativos ao mesmo tempo.</p>
+        <div class="cm-mono text-xs text-slate-500 mb-1">CONTRATOS ATIVOS (${deals.length}/5)</div>
         ${dealsHtml}
       </div>
+      ${footerBackButton()}
     </div>
   `;
 }
@@ -2083,7 +2354,7 @@ function renderCareerRosterScreen(state) {
       </button>
     `;
   }).join('');
-  return `<div class="h-full flex flex-col overflow-hidden">${careerHeader(state, 'Elenco')}<div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">${rows}</div></div>`;
+  return `<div class="h-full flex flex-col overflow-hidden">${careerHeader(state, 'Elenco')}<div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">${rows}</div>${footerBackButton()}</div>`;
 }
 
 function renderCareerProfileScreen(state) {
@@ -2092,12 +2363,14 @@ function renderCareerProfileScreen(state) {
   const d = career.driverPool[code];
   if (!d) return `<div class="h-full flex items-center justify-center cm-body text-slate-500">Piloto não encontrado.</div>`;
   const team = d.teamId ? career.teams[d.teamId] : null;
-  const isMine = d.teamId === state.playerTeamId && (d.role === 'race1' || d.role === 'race2');
+  const isMine = d.teamId === state.playerTeamId;
   const happiness = d.happiness != null ? d.happiness : 65;
   const hTone = happiness >= 70 ? '#3ECF6E' : happiness >= 40 ? '#FFB020' : '#E8383D';
   const hLabel = happiness >= 80 ? 'Radiante' : happiness >= 60 ? 'Contente' : happiness >= 40 ? 'Neutro' : happiness >= 20 ? 'Insatisfeito' : 'Muito infeliz';
-  const traits = driverTraits(d);
+  const traits = driverTraits(d, team);
   const onCooldown = isMine && d.lastTalkRaceSeq != null && career.raceSequence - d.lastTalkRaceSeq < 1;
+  const draft = state.contractUI || {};
+  const isEditingContract = draft.targetCode === code;
   return `
     <div class="h-full flex flex-col overflow-hidden">
       ${careerHeader(state, 'Perfil do piloto')}
@@ -2119,15 +2392,24 @@ function renderCareerProfileScreen(state) {
           ${isMine ? `<button data-talk-code="${d.code}" ${onCooldown ? 'disabled' : ''} class="w-full ${onCooldown ? 'bg-slate-900 border border-slate-800 text-slate-600' : 'bg-slate-800 border border-slate-700 text-slate-200'} rounded-md py-2 cm-body text-sm">${onCooldown ? 'Já conversaram essa corrida' : '💬 Conversar com o piloto'}</button>` : ''}
         </div>
 
+        ${isMine ? `
+        <div class="bg-slate-900 border border-slate-800 rounded-md p-3 mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="cm-body text-sm text-slate-300">📝 Contrato</span>
+            <span class="cm-mono text-xs text-slate-500">${fmtMoney(d.salary)}/corrida · ${d.contractYears} ano(s)</span>
+          </div>
+          ${isEditingContract ? contractDraftPanel(draft, code, false) : `<button data-action="${act({ type: 'CONTRACT_DRAFT_START', code })}" class="w-full bg-slate-800 border border-slate-700 rounded-md py-2 cm-body text-sm text-slate-200">Renegociar contrato</button>`}
+        </div>` : ''}
+
         ${(traits.positives.length || traits.negatives.length) ? `
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
           <div class="bg-slate-900 border border-emerald-900 rounded-md p-3">
-            <div class="cm-mono text-xs text-emerald-400 mb-1.5">PONTOS FORTES</div>
+            <div class="cm-mono text-xs text-emerald-400 mb-1.5">PONTOS FORTES DO PILOTO</div>
             ${traits.positives.length ? traits.positives.map(t => `<div class="cm-body text-xs text-slate-300 mb-1">✓ ${t}</div>`).join('') : '<div class="cm-body text-xs text-slate-600">Nada de excepcional ainda.</div>'}
           </div>
           <div class="bg-slate-900 border border-red-900 rounded-md p-3">
-            <div class="cm-mono text-xs text-red-400 mb-1.5">PONTOS FRACOS</div>
-            ${traits.negatives.length ? traits.negatives.map(t => `<div class="cm-body text-xs text-slate-300 mb-1">✗ ${t}</div>`).join('') : '<div class="cm-body text-xs text-slate-600">Nenhuma fraqueza notável.</div>'}
+            <div class="cm-mono text-xs text-red-400 mb-1.5">O QUE ELE COBRA DA EQUIPE</div>
+            ${traits.negatives.length ? traits.negatives.map(t => `<div class="cm-body text-xs text-slate-300 mb-1">✗ ${t}</div>`).join('') : '<div class="cm-body text-xs text-slate-600">Está satisfeito com o carro por enquanto.</div>'}
           </div>
         </div>` : ''}
 
@@ -2136,6 +2418,7 @@ function renderCareerProfileScreen(state) {
         ${skillBar('Ultrapassagem', d.overtaking)}${skillBar('Largada', d.starts)}${skillBar('Concentração', d.focus)}
         ${skillBar('Físico', d.physical)}${skillBar('Rapidez', d.pace)}
       </div>
+      ${footerBackButton()}
     </div>
   `;
 }
@@ -2245,7 +2528,9 @@ function repairLoadedCareer(career) {
     if (!Array.isArray(t.sponsorDeals)) t.sponsorDeals = [];
     if (typeof t.budget !== 'number' || Number.isNaN(t.budget)) t.budget = 30;
     if (!t.engineSupplierId) t.engineSupplierId = 'mercedes';
-    if (typeof t.engineContractYears !== 'number') t.engineContractYears = 2;
+    if (!t.pendingEngineSupplierId) t.pendingEngineSupplierId = t.engineSupplierId;
+    if (typeof t.engineConfirmedThisSeason !== 'boolean') t.engineConfirmedThisSeason = false;
+    if (typeof t.engineContractYears !== 'number') t.engineContractYears = 1;
     if (!Array.isArray(t.driverCodes)) t.driverCodes = [];
   });
   Object.values(career.driverPool).forEach(d => {

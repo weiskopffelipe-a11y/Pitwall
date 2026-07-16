@@ -67,6 +67,8 @@
   .team-btn { background-color: var(--tp); color: var(--ttext); }
   .team-border { border-color: var(--tp); }
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
 </head>
 <body class="cm-body">
 <div id="root" class="bg-slate-950 text-slate-100"></div>
@@ -77,6 +79,21 @@
 
 const NAME_POOL_FIRST = ['Lucas','Mateus','Théo','Enzo','Diego','Mikkel','Oliver','Felix','Noah','Leon','Mika','Arjun','Kai','Rio','Bruno','Yannick','Marco','Adam','Lorenzo','Nico','Sami','Elia','Victor','Rafael','Tomas','Ben','Jamie','Charlie','Alexei','Hugo'];
 const NAME_POOL_LAST = ['Silva','Bianchi','Moreau','Larsson','Weber','Costa','Rossi','Fernández','Novak','Andersson','Tanaka','Mercer','Duval','Reyes','Petrov','Nakamura','Sørensen','Álvarez','Keller','Brandt','Okafor','Lindgren','Marchetti','Souza','Haddad','Kowalski','Doyle','Vasquez','Ferreira','Kimura'];
+
+// ---- Liga online (opcional) ----
+// Pra ligar o modo online, crie um projeto grátis em https://console.firebase.google.com,
+// ative "Realtime Database" (modo teste), e cole a config abaixo (Configurações do projeto > seus apps > SDK).
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyCjdtznz1CUwi_0HNCloKH-PsuagfERdg0',
+  databaseURL: 'https://pitwall-manager-default-rtdb.firebaseio.com',
+  projectId: 'pitwall-manager',
+};
+function randomLeagueCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
 
 const TEAMS = [
   { id: 'mcl', name: 'McLaren', short: 'MCL', color: '#FF8000', secondary: '#FFFFFF', textOnPrimary: '#0B0E14', engine: 'Mercedes', carPace: 95, reliability: 92,
@@ -846,7 +863,7 @@ function initCareerState(playerTeamId, startYear) {
   Object.keys(teams).forEach(id => { constructorStandings[id] = 0; });
 
   return {
-    year, playerTeamId, managerName: null, lastSeenLogCount: 0, roundsSinceSponsorOffer: 0, teams, driverPool, driverStandings, constructorStandings,
+    year, playerTeamId, managerName: null, lastSeenLogCount: 0, roundsSinceSponsorOffer: 0, onlineLeague: null, teams, driverPool, driverStandings, constructorStandings,
     calendar: buildCalendarForYear(year), roundIndex: 0, seasonHistory: [], raceSequence: 0,
     log: ['Bem-vindo à Pitwall Manager! Temporada 2026 pronta para começar.'],
   };
@@ -868,6 +885,16 @@ function applyCareerRaceResults(career, finalCars) {
     }
   });
   return { newDriverStandings, newConstructorStandings, pointsAwarded };
+}
+
+function clearConflictingPending(driverPool, teamId, role, exceptCode) {
+  const next = { ...driverPool };
+  Object.values(next).forEach(d => {
+    if (d.code !== exceptCode && d.pendingTeamId === teamId && d.pendingRole === role) {
+      next[d.code] = { ...d, pendingTeamId: undefined, pendingRole: undefined };
+    }
+  });
+  return next;
 }
 
 function maybeGenerateAiRenewalNews(career) {
@@ -1011,7 +1038,8 @@ function processOffseason(career) {
     if (!teams[seat.teamId]) return;
     freeAgents.sort((a, b) => b.pace - a.pace);
     let hire;
-    if (freeAgents.length && Math.random() < 0.6) {
+    const freeAgentChance = seat.role === 'reserve' ? 0.5 : 0.88;
+    if (freeAgents.length && Math.random() < freeAgentChance) {
       hire = freeAgents.shift();
       hire.salary = roleAdjustedSalary(hire, seat.role);
       if (seat.teamId === career.playerTeamId) log.push(`${hire.name} assina com ${teams[seat.teamId].short} (${roleLabel(seat.role)}).`);
@@ -1022,6 +1050,19 @@ function processOffseason(career) {
       if (seat.teamId === career.playerTeamId) log.push(`Estreante ${hire.name} (${hire.age} anos) assina com ${teams[seat.teamId].short}.`);
     }
     hire.teamId = seat.teamId; hire.role = seat.role; hire.contractYears = randInt(1, 3);
+  });
+
+  // ---- rede de segurança: garante no máximo 1 piloto por papel em cada equipe (corrige qualquer sobreposição) ----
+  Object.keys(teams).forEach(id => {
+    ['race1', 'race2', 'reserve'].forEach(role => {
+      const holders = Object.values(driverPool).filter(d => !d.retired && d.teamId === id && d.role === role);
+      if (holders.length <= 1) return;
+      holders.sort((a, b) => b.pace - a.pace);
+      holders.slice(1).forEach(extra => {
+        driverPool[extra.code] = { ...extra, teamId: null, role: null };
+        if (id === career.playerTeamId) log.push(`${extra.name} não tinha vaga confirmada e virou agente livre.`);
+      });
+    });
   });
 
   // Recompute every team's roster from the authoritative source (each driver's own teamId/role) rather than
@@ -1168,6 +1209,9 @@ const initialState = {
   raceWeatherStart: null, preRaceTireChoice: { race1: null, race2: null },
   eventLog: [], prevPositions: {}, autoPlay: false, speed: 1, qualiResult: [], history: [], playerCarIds: [],
   career: null, careerViewDriverCode: null, careerLastRaceApplied: null, pendingSponsorOffer: null, tutorialPage: 0,
+  leagueStandingsData: null, leagueStandingsLoading: false, leagueStandingsError: null, leagueJoinError: null,
+  onlineSetup: { code: null, playerName: '', takenTeams: {}, error: null, loading: false },
+  onlineLobbyPlayers: null,
   contractUI: { targetCode: null, salary: 0, years: 1, targetRole: null, lastCounter: null, lastMessage: null },
 };
 
@@ -1211,6 +1255,32 @@ function reducer(state, action) {
       const career = initCareerState(state.playerTeamId, action.year);
       return { ...state, career };
     }
+    case 'ONLINE_SETUP_LOADING':
+      return { ...state, onlineSetup: { ...state.onlineSetup, loading: true, error: null } };
+    case 'ONLINE_SETUP_ERROR':
+      return { ...state, onlineSetup: { ...state.onlineSetup, loading: false, error: action.message } };
+    case 'ONLINE_CODE_READY':
+      return { ...state, phase: 'online-team-select', onlineSetup: { ...state.onlineSetup, code: action.code, playerName: action.playerName, takenTeams: action.takenTeams || {}, loading: false, error: null } };
+    case 'ONLINE_TEAM_JOINED':
+      return { ...state, phase: 'online-lobby', onlineSetup: { ...state.onlineSetup, teamId: action.teamId } };
+    case 'ONLINE_LOBBY_UPDATE':
+      return { ...state, onlineLobbyPlayers: action.players };
+    case 'ONLINE_START_SESSION': {
+      const career = initCareerState(action.teamId);
+      career.managerName = (state.onlineSetup.playerName || 'Chefe').slice(0, 30);
+      career.onlineLeague = { code: state.onlineSetup.code, playerName: career.managerName };
+      return { ...state, mode: 'career', playerTeamId: action.teamId, career, phase: 'career-hub', onlineLobbyPlayers: null };
+    }
+    case 'SET_ONLINE_LEAGUE':
+      return { ...state, career: { ...state.career, onlineLeague: { code: action.code, playerName: action.playerName || 'Chefe', joined: true } } };
+    case 'LEAVE_ONLINE_LEAGUE':
+      return { ...state, career: { ...state.career, onlineLeague: null }, leagueStandingsData: null };
+    case 'LEAGUE_STANDINGS_RECEIVED':
+      return { ...state, leagueStandingsData: action.data, leagueStandingsError: action.error || null, leagueStandingsLoading: false };
+    case 'LEAGUE_STANDINGS_LOADING':
+      return { ...state, leagueStandingsLoading: true, leagueStandingsError: null };
+    case 'LEAGUE_JOIN_ERROR':
+      return { ...state, leagueJoinError: action.message };
     case 'CAREER_GOTO': {
       const career = action.screen === 'news' && state.career ? { ...state.career, lastSeenLogCount: (state.career.log || []).length } : state.career;
       return { ...state, career, phase: 'career-' + action.screen, contractUI: { targetCode: null, salary: 0, years: 1, targetRole: null, lastCounter: null, lastMessage: null } };
@@ -1242,12 +1312,14 @@ function reducer(state, action) {
         let advanced = { ...career, roundIndex: career.roundIndex + 1 };
         const transferNews = maybeGenerateAiTransferNews(advanced);
         if (transferNews) {
-          const driverPool = { ...advanced.driverPool, [transferNews.code]: { ...advanced.driverPool[transferNews.code], pendingTeamId: transferNews.teamId, pendingRole: transferNews.role } };
+          let driverPool = clearConflictingPending(advanced.driverPool, transferNews.teamId, transferNews.role, transferNews.code);
+          driverPool = { ...driverPool, [transferNews.code]: { ...driverPool[transferNews.code], pendingTeamId: transferNews.teamId, pendingRole: transferNews.role } };
           advanced = { ...advanced, driverPool };
         }
         const renewalNews = maybeGenerateAiRenewalNews(advanced);
         if (renewalNews) {
-          const driverPool = { ...advanced.driverPool, [renewalNews.code]: { ...advanced.driverPool[renewalNews.code], pendingTeamId: renewalNews.teamId, pendingRole: renewalNews.role } };
+          let driverPool = clearConflictingPending(advanced.driverPool, renewalNews.teamId, renewalNews.role, renewalNews.code);
+          driverPool = { ...driverPool, [renewalNews.code]: { ...driverPool[renewalNews.code], pendingTeamId: renewalNews.teamId, pendingRole: renewalNews.role } };
           advanced = { ...advanced, driverPool };
         }
         const offer = maybeGenerateSponsorOffer(advanced);
@@ -1331,7 +1403,7 @@ function reducer(state, action) {
 
       // Novo piloto (agente livre ou de outra equipe): só chega na temporada seguinte, como qualquer outra transferência.
       const currentHolderCode = team.driverCodes.find(c => c !== action.code && career.driverPool[c] && career.driverPool[c].role === targetRole);
-      let driverPool = { ...career.driverPool };
+      let driverPool = clearConflictingPending(career.driverPool, state.playerTeamId, targetRole, action.code);
       driverPool[action.code] = { ...driver, pendingTeamId: state.playerTeamId, pendingRole: targetRole };
       if (currentHolderCode) driverPool[currentHolderCode] = { ...driverPool[currentHolderCode], pendingTeamId: null, pendingRole: null };
       const nextYear = career.year + 1;
@@ -1777,13 +1849,106 @@ function renderModeScreen() {
       <button data-action="${act({ type: 'GOTO', phase: 'menu' })}" class="cm-body text-sm text-slate-400 mb-3 self-start">← Voltar</button>
       <div class="cm-mono text-xs text-slate-500 mb-3 text-center">ESCOLHA O MODO DE JOGO</div>
       <button data-action="${act({ type: 'GOTO', phase: 'career-team' })}" class="text-left bg-slate-900 border border-slate-800 rounded-lg p-4 mb-3 hover:border-cyan-500">
-        <div class="cm-display text-xl font-bold text-slate-100 mb-1">📋 Modo Carreira</div>
-        <div class="cm-body text-sm text-slate-400">Temporada completa (22 corridas), contratos com pilotos e motor, patrocínios, upgrades no carro, e mercado de transferências — de 2026 até 2040.</div>
+        <div class="cm-display text-xl font-bold text-slate-100 mb-1">📋 Modo Offline</div>
+        <div class="cm-body text-sm text-slate-400">Temporada completa (22 corridas), contratos com pilotos e motor, patrocínios, upgrades no carro, e mercado de transferências — de 2026 até 2040. Só você, sem internet.</div>
+      </button>
+      <button data-action="${act({ type: 'GOTO', phase: 'online-entry' })}" class="text-left bg-slate-900 border border-slate-800 rounded-lg p-4 mb-3 hover:border-emerald-500">
+        <div class="cm-display text-xl font-bold text-slate-100 mb-1">🌐 Modo Online</div>
+        <div class="cm-body text-sm text-slate-400">Jogue com amigos — cada um escolhe uma equipe diferente, e todos acompanham o mesmo campeonato combinado. Precisa de pelo menos 2 jogadores pra começar.</div>
       </button>
       <button data-action="${act({ type: 'GOTO', phase: 'tutorial' })}" class="text-left bg-slate-900 border border-slate-800 rounded-lg p-4 hover:border-amber-500">
         <div class="cm-display text-xl font-bold text-slate-100 mb-1">🎓 Tutorial</div>
         <div class="cm-body text-sm text-slate-400">Aprenda a jogar: pneus, ritmo, pit stops, contratos e upgrades — antes de assumir uma equipe de verdade.</div>
       </button>
+    </div>
+  `;
+}
+
+function renderOnlineEntryScreen(state) {
+  const su = state.onlineSetup;
+  return `
+    <div class="h-full overflow-y-auto p-4 flex flex-col justify-center">
+      <button data-action="${act({ type: 'GOTO', phase: 'mode' })}" class="cm-body text-sm text-slate-400 mb-3 self-start">← Voltar</button>
+      <div class="cm-display text-2xl font-bold text-slate-100 mb-1 text-center">🌐 Modo Online</div>
+      <p class="cm-body text-sm text-slate-400 text-center mb-4">Precisa de pelo menos 2 jogadores pra começar a temporada.</p>
+      ${su.error ? `<div class="bg-red-950 border border-red-800 rounded-md p-2.5 mb-3 text-xs text-red-300">${su.error}</div>` : ''}
+      <div class="mb-4">
+        <div class="cm-mono text-xs text-slate-500 mb-1.5">SEU NOME</div>
+        <input type="text" id="online-player-name-input" maxlength="30" placeholder="Como te chamam?" class="w-full cm-body bg-slate-900 border border-slate-700 rounded-md px-3 py-2.5 text-slate-100" autocomplete="off">
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 mb-3">
+        <div class="cm-display font-semibold text-slate-100 mb-1">Criar sessão nova</div>
+        <p class="cm-body text-xs text-slate-500 mb-2">Gera um código pra compartilhar com seus amigos.</p>
+        <button data-online-create="1" ${su.loading ? 'disabled' : ''} class="w-full bg-emerald-600 text-white cm-body text-sm font-semibold py-2.5 rounded-md">${su.loading ? 'Aguarde...' : 'Criar sessão'}</button>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+        <div class="cm-display font-semibold text-slate-100 mb-1">Entrar com um código</div>
+        <input type="text" id="online-join-code-input" maxlength="6" placeholder="ex: A3B7K" class="w-full cm-mono text-center uppercase bg-slate-950 border border-slate-700 rounded-md px-3 py-2 mb-2 text-slate-100" autocomplete="off">
+        <button data-online-join="1" ${su.loading ? 'disabled' : ''} class="w-full bg-slate-800 border border-slate-700 cm-body text-sm text-slate-200 font-semibold py-2.5 rounded-md">${su.loading ? 'Aguarde...' : 'Entrar na sessão'}</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderOnlineTeamSelectScreen(state) {
+  const su = state.onlineSetup;
+  const cards = TEAMS.map(t => {
+    const taken = su.takenTeams && su.takenTeams[t.id];
+    if (taken) {
+      return `
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 opacity-40">
+          <div class="flex items-center gap-2 mb-1">${teamBadge(t, 28)}<span class="cm-display font-bold text-slate-100">${t.short}</span></div>
+          <div class="cm-body text-xs text-slate-500">✓ ${taken.playerName}</div>
+        </div>
+      `;
+    }
+    return `
+      <button data-online-pick-team="${t.id}" class="text-left bg-slate-900 border border-slate-800 rounded-lg p-3 hover:border-emerald-500">
+        <div class="flex items-center gap-2 mb-1">${teamBadge(t, 28)}<span class="cm-display font-bold text-slate-100">${t.short}</span></div>
+        <div class="cm-body text-xs text-slate-500">${t.name}</div>
+      </button>
+    `;
+  }).join('');
+  return `
+    <div class="h-full flex flex-col p-3 sm:p-4 overflow-hidden">
+      <div class="shrink-0">
+        <div class="cm-mono text-xs text-slate-500 mb-1">CÓDIGO DA SESSÃO: <span class="text-emerald-400 font-semibold">${su.code}</span></div>
+        <h2 class="cm-display text-2xl font-bold mb-2">Escolha sua equipe</h2>
+        ${su.error ? `<div class="bg-red-950 border border-red-800 rounded-md p-2.5 mb-2 text-xs text-red-300">${su.error}</div>` : ''}
+      </div>
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2 content-start pb-2">${cards}</div>
+    </div>
+  `;
+}
+
+function renderOnlineLobbyScreen(state) {
+  const su = state.onlineSetup;
+  const players = state.onlineLobbyPlayers || su.takenTeams || {};
+  const count = Object.keys(players).length;
+  const rows = Object.entries(players).map(([teamId, p]) => {
+    const team = TEAMS.find(t => t.id === teamId);
+    return `
+      <div class="flex items-center gap-2 px-3 py-2 border-b border-slate-800 last:border-b-0">
+        ${team ? teamBadge(team, 26) : ''}
+        <div class="flex-1"><span class="cm-body text-sm text-slate-100">${team ? team.short : teamId}</span> <span class="cm-body text-xs text-slate-500">— ${p.playerName}</span></div>
+      </div>
+    `;
+  }).join('');
+  return `
+    <div class="h-full flex flex-col p-3 sm:p-4 overflow-hidden">
+      <div class="shrink-0 text-center mb-3">
+        <div class="cm-mono text-xs text-slate-500 mb-1">CÓDIGO DA SESSÃO</div>
+        <div class="cm-mono text-2xl text-emerald-400 font-bold">${su.code}</div>
+        <p class="cm-body text-xs text-slate-500 mt-1">Compartilhe esse código com seus amigos pra entrarem.</p>
+      </div>
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto">
+        <div class="cm-mono text-xs text-slate-500 mb-1">JOGADORES NA SESSÃO (${count})</div>
+        <div class="bg-slate-900 border border-slate-800 rounded-md mb-3">${rows || '<div class="p-3 text-xs text-slate-500">Aguardando...</div>'}</div>
+      </div>
+      <div class="shrink-0">
+        ${count < 2 ? `<div class="cm-body text-xs text-amber-400 text-center mb-2">Aguardando pelo menos 1 amigo entrar (mínimo 2 jogadores)...</div>` : ''}
+        <button data-online-start="1" ${count < 2 ? 'disabled' : ''} class="w-full ${count < 2 ? 'bg-slate-800 text-slate-500' : 'bg-emerald-600 text-white'} cm-body font-semibold py-3 rounded-md">🏁 Iniciar temporada</button>
+      </div>
     </div>
   `;
 }
@@ -2037,6 +2202,7 @@ function renderCareerHubScreen(state) {
     { screen: 'calendar', icon: '📅', label: 'Calendário' }, { screen: 'standings', icon: '🏆', label: 'Classificação' },
     { screen: 'market', icon: '🔄', label: 'Mercado' }, { screen: 'upgrades', icon: '🔧', label: 'Upgrades' },
     { screen: 'sponsors', icon: '💰', label: 'Patrocínios' }, { screen: 'roster', icon: '🏎️', label: 'Elenco' },
+    { screen: 'league', icon: '🌐', label: 'Liga Online' },
   ].map(b => `
     <button data-action="${act({ type: 'CAREER_GOTO', screen: b.screen })}" class="bg-slate-900 border border-slate-800 rounded-md p-3 text-center hover:border-slate-600">
       <div class="text-xl mb-1">${b.icon}</div><div class="cm-body text-xs text-slate-300">${b.label}</div>
@@ -2548,6 +2714,67 @@ function renderCareerProfileScreen(state) {
   `;
 }
 
+function renderOnlineLeagueScreen(state) {
+  const career = state.career;
+  const league = career.onlineLeague;
+
+  if (!league) {
+    return `
+      <div class="h-full flex flex-col overflow-hidden">
+        ${careerHeader(state, 'Liga Online')}
+        <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">
+          <p class="cm-body text-xs text-slate-500 mb-3">Jogue com amigos: cada um comanda uma equipe diferente na própria carreira, e todos veem o mesmo campeonato combinado aqui.</p>
+          ${state.leagueJoinError ? `<div class="bg-red-950 border border-red-800 rounded-md p-2.5 mb-3 text-xs text-red-300">${state.leagueJoinError}</div>` : ''}
+          <div class="bg-slate-900 border border-slate-800 rounded-md p-3 mb-3">
+            <div class="cm-display font-semibold text-slate-100 mb-1">Criar uma liga nova</div>
+            <p class="cm-body text-xs text-slate-500 mb-2">Gera um código pra compartilhar com seus amigos.</p>
+            <button data-league-create="1" class="w-full bg-amber-500 text-slate-950 cm-body text-sm font-semibold py-2 rounded-md">Criar liga</button>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-md p-3">
+            <div class="cm-display font-semibold text-slate-100 mb-1">Entrar com um código</div>
+            <input type="text" id="league-code-input" maxlength="6" placeholder="ex: A3B7K" class="w-full cm-mono text-center text-lg uppercase bg-slate-950 border border-slate-700 rounded-md px-3 py-2 mb-2 text-slate-100" autocomplete="off">
+            <button data-league-join="1" class="w-full bg-slate-800 border border-slate-700 cm-body text-sm text-slate-200 font-semibold py-2 rounded-md">Entrar na liga</button>
+          </div>
+        </div>
+        ${footerBackButton()}
+      </div>
+    `;
+  }
+
+  const rows = state.leagueStandingsData ? Object.entries(state.leagueStandingsData)
+    .sort((a, b) => (b[1].constructorPoints || 0) - (a[1].constructorPoints || 0))
+    .map(([teamId, t], i) => `
+      <div class="flex items-center px-3 py-2 border-b border-slate-800 last:border-b-0 ${teamId === state.playerTeamId ? 'bg-slate-800' : ''}">
+        <span class="cm-mono text-xs w-5 text-slate-500">${i + 1}</span>
+        <div class="w-1.5 h-4 rounded-sm mx-2" style="background-color:${t.teamColor || '#666'}"></div>
+        <div class="flex-1 min-w-0">
+          <div class="cm-body text-sm text-slate-100 truncate">${t.teamName || teamId} <span class="text-slate-500 text-xs">— ${t.playerName || '?'}</span></div>
+          <div class="cm-mono text-[10px] text-slate-500">rodada ${(t.roundIndex || 0) + 1} · ${t.year || ''}</div>
+        </div>
+        <span class="cm-mono text-sm text-amber-400 font-semibold">${t.constructorPoints || 0}</span>
+      </div>
+    `).join('') : '';
+
+  return `
+    <div class="h-full flex flex-col overflow-hidden">
+      ${careerHeader(state, 'Liga Online')}
+      <div class="shrink-0 px-3 pt-2 pb-1">
+        <div class="cm-body text-xs text-slate-500">Código da liga: <span class="cm-mono text-amber-400 font-semibold text-sm">${league.code}</span> <button data-league-copy="${league.code}" class="underline text-slate-400 ml-1">copiar</button></div>
+      </div>
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto px-3">
+        ${state.leagueStandingsError ? `<div class="bg-red-950 border border-red-800 rounded-md p-2.5 mb-3 text-xs text-red-300">${state.leagueStandingsError}</div>` : ''}
+        <div class="cm-mono text-xs text-slate-500 mb-1 mt-2">CAMPEONATO COMBINADO (CONSTRUTORES)</div>
+        <div class="bg-slate-900 border border-slate-800 rounded-md mb-3">
+          ${rows || '<div class="cm-body text-xs text-slate-500 p-3">Toque em "Atualizar" pra buscar a classificação.</div>'}
+        </div>
+        <button data-league-refresh="1" ${state.leagueStandingsLoading ? 'disabled' : ''} class="w-full bg-slate-800 border border-slate-700 cm-body text-sm text-slate-200 py-2 rounded-md mb-2">${state.leagueStandingsLoading ? 'Buscando...' : '🔄 Atualizar classificação'}</button>
+        <button data-league-leave="1" class="w-full text-red-400 cm-body text-xs py-2">Sair da liga</button>
+      </div>
+      ${footerBackButton()}
+    </div>
+  `;
+}
+
 function renderCareerNewsScreen(state) {
   const career = state.career;
   const items = (career.log || []).slice().reverse();
@@ -2621,6 +2848,9 @@ function renderApp(state) {
   if (p === 'menu') return renderMenuScreen();
   if (p === 'mode') return renderModeScreen();
   if (p === 'tutorial') return renderTutorialScreen(state);
+  if (p === 'online-entry') return renderOnlineEntryScreen(state);
+  if (p === 'online-team-select') return renderOnlineTeamSelectScreen(state);
+  if (p === 'online-lobby') return renderOnlineLobbyScreen(state);
   if (p === 'career-name') return renderCareerNameScreen(state);
   if (p === 'team') return renderTeamSelectScreen();
   if (p === 'circuit') return renderCircuitSelectScreen(state);
@@ -2630,6 +2860,7 @@ function renderApp(state) {
   if (p === 'career-team') return renderCareerTeamSelectScreen();
   if (p === 'career-hub') return renderCareerHubScreen(state);
   if (p === 'career-news') return renderCareerNewsScreen(state);
+  if (p === 'career-league') return renderOnlineLeagueScreen(state);
   if (p === 'career-calendar') return renderCareerCalendarScreen(state);
   if (p === 'career-standings') return renderCareerStandingsScreen(state);
   if (p === 'career-contracts') return renderCareerContractsScreen(state);
@@ -2642,6 +2873,133 @@ function renderApp(state) {
   if (p === 'career-offseason') return renderCareerOffseasonScreen(state);
   if (p === 'career-race-result') return renderCareerRaceResultScreen(state);
   return `<div class="h-full flex items-center justify-center cm-body text-slate-500">tela desconhecida: ${p}</div>`;
+}
+
+// ---- liga online (opcional, via Firebase) ----
+let firebaseDb = null;
+function firebaseReady() {
+  if (firebaseDb) return true;
+  try {
+    if (typeof firebase === 'undefined') return false;
+    if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey === 'COLE_AQUI') return false;
+    if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    firebaseDb = firebase.database();
+    return true;
+  } catch (e) { return false; }
+}
+
+function currentTeamPointsSummary(state) {
+  const career = state.career;
+  const team = career.teams[state.playerTeamId];
+  const driverPoints = {};
+  Object.entries(career.driverStandings).forEach(([code, pts]) => {
+    const d = career.driverPool[code];
+    if (d && d.teamId === state.playerTeamId) driverPoints[code] = { name: d.name, points: pts };
+  });
+  return {
+    playerName: (career.managerName || 'Chefe').slice(0, 30),
+    teamShort: team.short, teamName: team.name, teamColor: team.color,
+    roundIndex: career.roundIndex, year: career.year,
+    constructorPoints: career.constructorStandings[state.playerTeamId] || 0,
+    driverPoints, lastUpdated: Date.now(),
+  };
+}
+
+async function pushLeagueResult(state) {
+  if (!state.career || !state.career.onlineLeague || !firebaseReady()) return;
+  try {
+    await firebaseDb.ref(`leagues/${state.career.onlineLeague.code}/teams/${state.playerTeamId}`).set(currentTeamPointsSummary(state));
+  } catch (e) { /* best-effort sync — don't block gameplay if it fails */ }
+}
+
+async function createOnlineLeague(state) {
+  if (!firebaseReady()) { dispatch({ type: 'LEAGUE_JOIN_ERROR', message: 'Liga online ainda não configurada — veja o topo do arquivo do jogo (FIREBASE_CONFIG).' }); return; }
+  const code = randomLeagueCode();
+  try {
+    await firebaseDb.ref(`leagues/${code}/teams/${state.playerTeamId}`).set(currentTeamPointsSummary(state));
+    dispatch({ type: 'SET_ONLINE_LEAGUE', code, playerName: state.career.managerName });
+  } catch (e) { dispatch({ type: 'LEAGUE_JOIN_ERROR', message: 'Erro ao criar liga: ' + e.message }); }
+}
+
+async function joinOnlineLeague(state, rawCode) {
+  if (!firebaseReady()) { dispatch({ type: 'LEAGUE_JOIN_ERROR', message: 'Liga online ainda não configurada — veja o topo do arquivo do jogo (FIREBASE_CONFIG).' }); return; }
+  const code = (rawCode || '').toUpperCase().trim();
+  if (!code) { dispatch({ type: 'LEAGUE_JOIN_ERROR', message: 'Digite o código da liga.' }); return; }
+  try {
+    const leagueSnap = await firebaseDb.ref(`leagues/${code}/teams`).get();
+    if (!leagueSnap.exists()) { dispatch({ type: 'LEAGUE_JOIN_ERROR', message: 'Nenhuma liga encontrada com esse código.' }); return; }
+    const teamsData = leagueSnap.val();
+    const conflict = teamsData[state.playerTeamId];
+    if (conflict && conflict.playerName && conflict.playerName !== (state.career.managerName || 'Chefe')) {
+      dispatch({ type: 'LEAGUE_JOIN_ERROR', message: `${conflict.playerName} já está usando essa equipe nessa liga. Escolha uma equipe diferente pra sua carreira, ou peça pra criarem outra liga.` });
+      return;
+    }
+    await firebaseDb.ref(`leagues/${code}/teams/${state.playerTeamId}`).set(currentTeamPointsSummary(state));
+    dispatch({ type: 'SET_ONLINE_LEAGUE', code, playerName: state.career.managerName });
+  } catch (e) { dispatch({ type: 'LEAGUE_JOIN_ERROR', message: 'Erro ao entrar na liga: ' + e.message }); }
+}
+
+async function fetchLeagueStandings(state) {
+  if (!state.career || !state.career.onlineLeague) return;
+  if (!firebaseReady()) { dispatch({ type: 'LEAGUE_STANDINGS_RECEIVED', data: null, error: 'Liga online não configurada.' }); return; }
+  dispatch({ type: 'LEAGUE_STANDINGS_LOADING' });
+  try {
+    const snap = await firebaseDb.ref(`leagues/${state.career.onlineLeague.code}/teams`).get();
+    const data = snap.exists() ? snap.val() : {};
+    dispatch({ type: 'LEAGUE_STANDINGS_RECEIVED', data });
+  } catch (e) { dispatch({ type: 'LEAGUE_STANDINGS_RECEIVED', data: null, error: 'Erro ao buscar dados: ' + e.message }); }
+}
+
+let lobbyListenerRef = null;
+
+function stopLobbyListener() {
+  if (lobbyListenerRef) { try { lobbyListenerRef.off(); } catch (e) {} lobbyListenerRef = null; }
+}
+
+function startLobbyListener(code) {
+  if (!firebaseReady()) return;
+  stopLobbyListener();
+  lobbyListenerRef = firebaseDb.ref(`leagues/${code}/teams`);
+  lobbyListenerRef.on('value', (snap) => {
+    dispatch({ type: 'ONLINE_LOBBY_UPDATE', players: snap.exists() ? snap.val() : {} });
+  });
+}
+
+async function createOnlineSession(playerName) {
+  if (!firebaseReady()) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Liga online ainda não configurada — veja o topo do arquivo do jogo (FIREBASE_CONFIG).' }); return; }
+  if (!playerName || !playerName.trim()) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Digite seu nome primeiro.' }); return; }
+  dispatch({ type: 'ONLINE_SETUP_LOADING' });
+  const code = randomLeagueCode();
+  try {
+    await firebaseDb.ref(`leagues/${code}/meta`).set({ createdAt: Date.now() });
+    dispatch({ type: 'ONLINE_CODE_READY', code, playerName: playerName.trim(), takenTeams: {} });
+  } catch (e) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Erro ao criar sessão: ' + e.message }); }
+}
+
+async function joinOnlineSession(playerName, rawCode) {
+  if (!firebaseReady()) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Liga online ainda não configurada — veja o topo do arquivo do jogo (FIREBASE_CONFIG).' }); return; }
+  if (!playerName || !playerName.trim()) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Digite seu nome primeiro.' }); return; }
+  const code = (rawCode || '').toUpperCase().trim();
+  if (!code) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Digite o código da sessão.' }); return; }
+  dispatch({ type: 'ONLINE_SETUP_LOADING' });
+  try {
+    const snap = await firebaseDb.ref(`leagues/${code}/meta`).get();
+    if (!snap.exists()) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Nenhuma sessão encontrada com esse código.' }); return; }
+    const teamsSnap = await firebaseDb.ref(`leagues/${code}/teams`).get();
+    dispatch({ type: 'ONLINE_CODE_READY', code, playerName: playerName.trim(), takenTeams: teamsSnap.exists() ? teamsSnap.val() : {} });
+  } catch (e) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Erro ao entrar: ' + e.message }); }
+}
+
+async function pickOnlineTeam(state, teamId) {
+  const code = state.onlineSetup.code;
+  if (!firebaseReady() || !code) return;
+  try {
+    const existing = await firebaseDb.ref(`leagues/${code}/teams/${teamId}`).get();
+    if (existing.exists()) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Essa equipe acabou de ser escolhida por outra pessoa — escolha outra.' }); return; }
+    await firebaseDb.ref(`leagues/${code}/teams/${teamId}`).set({ playerName: state.onlineSetup.playerName, joinedAt: Date.now() });
+    dispatch({ type: 'ONLINE_TEAM_JOINED', teamId });
+    startLobbyListener(code);
+  } catch (e) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Erro ao escolher equipe: ' + e.message }); }
 }
 
 const SAVE_KEY = 'pitwallManagerSaveV1';
@@ -2722,6 +3080,7 @@ function dispatch(action) {
   state = reducer(state, action);
   saveCareerToStorage(state);
   render();
+  if (action.type === 'CAREER_CONTINUE' && state.career && state.career.onlineLeague) pushLeagueResult(state);
 }
 
 function scheduleAutoplay() {
@@ -2796,6 +3155,48 @@ document.getElementById('root').addEventListener('click', (e) => {
   const talkBtn = e.target.closest('[data-talk-code]');
   if (talkBtn) {
     dispatch({ type: 'TALK_TO_DRIVER', code: talkBtn.getAttribute('data-talk-code') });
+    return;
+  }
+  const leagueCreateBtn = e.target.closest('[data-league-create]');
+  if (leagueCreateBtn) { createOnlineLeague(state); return; }
+  const leagueJoinBtn = e.target.closest('[data-league-join]');
+  if (leagueJoinBtn) {
+    const input = document.getElementById('league-code-input');
+    joinOnlineLeague(state, input ? input.value : '');
+    return;
+  }
+  const leagueRefreshBtn = e.target.closest('[data-league-refresh]');
+  if (leagueRefreshBtn) { fetchLeagueStandings(state); return; }
+  const leagueLeaveBtn = e.target.closest('[data-league-leave]');
+  if (leagueLeaveBtn) { dispatch({ type: 'LEAVE_ONLINE_LEAGUE' }); return; }
+  const leagueCopyBtn = e.target.closest('[data-league-copy]');
+  if (leagueCopyBtn) {
+    const code = leagueCopyBtn.getAttribute('data-league-copy');
+    if (navigator.clipboard) navigator.clipboard.writeText(code).catch(() => {});
+    return;
+  }
+  const onlineCreateBtn = e.target.closest('[data-online-create]');
+  if (onlineCreateBtn) {
+    const nameInput = document.getElementById('online-player-name-input');
+    createOnlineSession(nameInput ? nameInput.value : '');
+    return;
+  }
+  const onlineJoinBtn = e.target.closest('[data-online-join]');
+  if (onlineJoinBtn) {
+    const nameInput = document.getElementById('online-player-name-input');
+    const codeInput = document.getElementById('online-join-code-input');
+    joinOnlineSession(nameInput ? nameInput.value : '', codeInput ? codeInput.value : '');
+    return;
+  }
+  const onlinePickTeamBtn = e.target.closest('[data-online-pick-team]');
+  if (onlinePickTeamBtn) {
+    pickOnlineTeam(state, onlinePickTeamBtn.getAttribute('data-online-pick-team'));
+    return;
+  }
+  const onlineStartBtn = e.target.closest('[data-online-start]');
+  if (onlineStartBtn) {
+    const teamId = state.onlineSetup.teamId;
+    if (teamId) { stopLobbyListener(); dispatch({ type: 'ONLINE_START_SESSION', teamId }); }
     return;
   }
   const btn = e.target.closest('[data-action]');

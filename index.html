@@ -522,6 +522,9 @@ function simulateLap(state) {
   const updatedCars = grid.map(carIn => {
     if (carIn.dnf) return carIn;
     let c = carIn.isPlayer ? { ...carIn } : aiDecide({ ...carIn }, newWeather, lap, totalLaps);
+    if (c.isPlayer && c.autoPitCompound && !c.pendingPit && c.tyreWear >= 92) {
+      c = { ...c, pendingPit: c.autoPitCompound };
+    }
 
     let pitLoss = 0, pitted = false;
     if (c.pendingPit) {
@@ -1380,6 +1383,19 @@ function reducer(state, action) {
     }
     case 'LIVE_RACE_MARK_PARTICIPANTS':
       return { ...state, grid: state.grid.map(c => (action.teamIds.includes(c.teamId) ? { ...c, isPlayer: true } : c)) };
+    case 'LIVE_RACE_APPLY_PRERACE_CHOICES': {
+      const grid = state.grid.map(c => {
+        const d = state.career.driverPool[c.code];
+        if (!d) return c;
+        const teamReady = action.readyTeams[c.teamId];
+        if (!teamReady || !teamReady.tireChoice) return c;
+        const tc = teamReady.tireChoice;
+        const chosen = tc[d.role];
+        const autoPit = tc[d.role + 'AutoPit'] || null;
+        return { ...c, ...(chosen ? { compound: chosen, compoundsUsed: [chosen] } : {}), autoPitCompound: autoPit };
+      });
+      return { ...state, grid };
+    }
     case 'LIVE_RACE_ENTER':
       return { ...state, phase: 'live-ready-check', liveRace: { round: action.round, readyTeams: {}, isHost: false, hostTeamId: null, phase: 'ready-check' } };
     case 'LIVE_RACE_READY_UPDATE':
@@ -1401,7 +1417,7 @@ function reducer(state, action) {
         flagLapsRemaining: action.data.flagLapsRemaining, weather: action.data.weather,
         circuit: action.data.circuit, totalLaps: action.data.circuit ? action.data.circuit.laps : state.totalLaps,
         eventLog: action.data.eventLog || [], prevPositions: action.data.prevPositions || {},
-        playerCarIds: action.data.grid.filter(c => c.teamId === state.playerTeamId && (c.role === 'race1' || c.role === 'race2')).map(c => c.id),
+        playerCarIds: action.data.grid.filter(c => c.teamId === state.playerTeamId).map(c => c.id),
         history: action.data.history || [], autoPlay: false, speed: 1,
       };
     }
@@ -1615,6 +1631,8 @@ function reducer(state, action) {
     // ---- simulação (compartilhada corrida rápida / carreira) ----
     case 'SET_PRERACE_TIRE':
       return { ...state, preRaceTireChoice: { ...(state.preRaceTireChoice || {}), [action.role]: action.compound } };
+    case 'SET_PRERACE_AUTOPIT':
+      return { ...state, preRaceTireChoice: { ...(state.preRaceTireChoice || {}), [action.role + 'AutoPit']: action.compound } };
     case 'START_RACE': {
       const teamsList = currentTeamsList(state);
       const circuit = state.circuit;
@@ -1632,9 +1650,10 @@ function reducer(state, action) {
       const tireChoice = state.preRaceTireChoice || {};
       grid = grid.map(c => {
         if (!c.isPlayer) return c;
-        const chosen = tireChoice[roleByCode[c.code]];
-        if (!chosen) return c;
-        return { ...c, compound: chosen, compoundsUsed: [chosen] };
+        const role = roleByCode[c.code];
+        const chosen = tireChoice[role];
+        const autoPit = tireChoice[role + 'AutoPit'] || null;
+        return { ...c, ...(chosen ? { compound: chosen, compoundsUsed: [chosen] } : {}), autoPitCompound: autoPit };
       });
       grid.sort((a, b) => a.gridPosition - b.gridPosition);
       const prevPositions = {}; grid.forEach(c => { prevPositions[c.id] = c.gridPosition; });
@@ -1686,6 +1705,7 @@ function reducer(state, action) {
     case 'TOGGLE_AUTOPLAY':
       return { ...state, autoPlay: !state.autoPlay };
     case 'SET_SPEED':
+      if (state.liveRace) return state;
       return { ...state, speed: action.speed };
 
     default:
@@ -2134,10 +2154,20 @@ function renderQualiScreen(state) {
     const buttons = Object.entries(COMPOUNDS).map(([key, cd]) => `
       <button data-action="${act({ type: 'SET_PRERACE_TIRE', role: d.role, compound: key })}" class="cm-mono text-xs px-2 py-1.5 rounded flex-1 ${chosen === key ? 'border-2 border-amber-400 bg-slate-800' : 'border border-slate-700 bg-slate-800'}" style="color:${cd.color}">${cd.short}</button>
     `).join('');
+    const autoPit = (state.preRaceTireChoice || {})[d.role + 'AutoPit'] || null;
+    const autoPitCompoundButtons = Object.entries(COMPOUNDS).map(([key, cd]) => `
+      <button data-action="${act({ type: 'SET_PRERACE_AUTOPIT', role: d.role, compound: key })}" class="cm-mono text-xs px-2 py-1 rounded flex-1 ${autoPit === key ? 'border-2 border-amber-400 bg-slate-800' : 'border border-slate-700 bg-slate-800'}" style="color:${cd.color}">${cd.short}</button>
+    `).join('');
     return `
       <div class="bg-slate-900 border border-slate-800 rounded-md p-2.5 mb-2">
         <div class="cm-body text-xs text-slate-300 mb-1.5">${d.name} <span class="text-slate-500">— pneu de largada</span></div>
-        <div class="flex gap-1">${buttons}</div>
+        <div class="flex gap-1 mb-2">${buttons}</div>
+        <div class="cm-body text-xs text-slate-400 mb-1">Pit stop durante a corrida</div>
+        <div class="flex gap-1 mb-1.5">
+          <button data-action="${act({ type: 'SET_PRERACE_AUTOPIT', role: d.role, compound: null })}" class="cm-body text-xs py-1.5 rounded flex-1 border ${!autoPit ? 'border-amber-400 bg-slate-800 text-amber-300' : 'border-slate-700 bg-slate-800 text-slate-400'}">Manual</button>
+          <button data-action="${act({ type: 'SET_PRERACE_AUTOPIT', role: d.role, compound: autoPit || (wet ? 'inter' : 'medium') })}" class="cm-body text-xs py-1.5 rounded flex-1 border ${autoPit ? 'border-amber-400 bg-slate-800 text-amber-300' : 'border-slate-700 bg-slate-800 text-slate-400'}">Automático</button>
+        </div>
+        ${autoPit ? `<div class="cm-body text-[10px] text-slate-500 mb-1">Para sozinho quando o pneu acabar, usando:</div><div class="flex gap-1">${autoPitCompoundButtons}</div>` : ''}
       </div>
     `;
   }).join('');
@@ -2213,7 +2243,6 @@ function renderRaceScreen(state) {
   const needsSecondCompound = playerCars.some(c => !c.dnf && state.weather.condition === 'dry' && c.compoundsUsed.length < 2 && lapsRemaining < 12 && lapsRemaining > 0);
   const roundLabel = state.mode === 'career' ? `Rodada ${state.career.roundIndex + 1}/${state.career.calendar.length} · ${state.career.year}` : null;
   const isGuest = !!(state.liveRace && !state.liveRace.isHost);
-  const isLiveHostRace = !!(state.liveRace && state.liveRace.isHost);
   const liveTag = state.liveRace ? `<div class="shrink-0 bg-emerald-900 border-b border-emerald-700 px-3 py-1 text-center cm-mono text-[10px] text-emerald-300">🌐 CORRIDA AO VIVO ${isGuest ? '— assistindo em tempo real' : '— você está comandando o ritmo'}</div>` : '';
   return `
     <div class="h-full flex flex-col overflow-hidden">
@@ -2229,8 +2258,7 @@ function renderRaceScreen(state) {
         </div>
         <div class="flex-1 min-h-0 px-2 py-2">${renderTimingTower(state.grid)}</div>
       </div>
-      ${isGuest ? `<div class="shrink-0 safe-bottom bg-slate-950 border-t border-slate-800 px-3 py-3 text-center cm-body text-xs text-slate-400">Só quem está comandando o ritmo pode pausar/avançar — sua estratégia (ritmo e pit stop) continua valendo.</div>` : renderPlaybackBar(state.autoPlay, state.speed, state.lap)}
-      ${isLiveHostRace && !isGuest ? `<div class="shrink-0 bg-slate-950 px-3 pb-2 text-center cm-body text-[10px] text-slate-600">Como anfitrião, você controla o andamento da corrida pra todo mundo.</div>` : ''}
+      ${state.liveRace ? `<div class="shrink-0 safe-bottom bg-slate-950 border-t border-slate-800 px-3 py-3 text-center cm-body text-xs text-slate-400">${isGuest ? 'Sua estratégia (ritmo e pit stop) continua valendo — a corrida roda sozinha, sem pausar.' : 'Como anfitrião, a corrida roda sozinha a 1x, sem pausar — todos competem em tempo real.'}</div>` : renderPlaybackBar(state.autoPlay, state.speed, state.lap)}
     </div>
   `;
 }
@@ -2857,6 +2885,26 @@ function renderLiveReadyCheckScreen(state) {
     const team = TEAMS.find(t => t.id === teamId);
     return `<div class="flex items-center gap-2 px-3 py-2 border-b border-slate-800 last:border-b-0">${team ? teamBadge(team, 24) : ''}<span class="cm-body text-sm text-slate-100">${team ? team.short : teamId}</span><span class="cm-body text-xs text-slate-500">— ${p.playerName}</span></div>`;
   }).join('');
+  const myTeamObj = currentTeamsList(state).find(t => t.id === state.playerTeamId);
+  const myDrivers = (amReady || !myTeamObj) ? [] : activeCareerRaceDrivers(myTeamObj);
+  const tc = state.preRaceTireChoice || {};
+  const picker = myDrivers.map(d => {
+    const chosen = tc[d.role] || 'medium';
+    const autoPit = tc[d.role + 'AutoPit'] || null;
+    const tireButtons = Object.entries(COMPOUNDS).map(([key, cd]) => `
+      <button data-action="${act({ type: 'SET_PRERACE_TIRE', role: d.role, compound: key })}" class="cm-mono text-xs px-1.5 py-1.5 rounded flex-1 ${chosen === key ? 'border-2 border-amber-400 bg-slate-800' : 'border border-slate-700 bg-slate-800'}" style="color:${cd.color}">${cd.short}</button>
+    `).join('');
+    return `
+      <div class="bg-slate-900 border border-slate-800 rounded-md p-2.5 mb-2">
+        <div class="cm-body text-xs text-slate-300 mb-1.5">${d.name} <span class="text-slate-500">— pneu de largada</span></div>
+        <div class="flex gap-1 mb-2">${tireButtons}</div>
+        <div class="flex gap-1">
+          <button data-action="${act({ type: 'SET_PRERACE_AUTOPIT', role: d.role, compound: null })}" class="cm-body text-xs py-1.5 rounded flex-1 border ${!autoPit ? 'border-amber-400 bg-slate-800 text-amber-300' : 'border-slate-700 bg-slate-800 text-slate-400'}">Pit manual</button>
+          <button data-action="${act({ type: 'SET_PRERACE_AUTOPIT', role: d.role, compound: autoPit || 'medium' })}" class="cm-body text-xs py-1.5 rounded flex-1 border ${autoPit ? 'border-amber-400 bg-slate-800 text-amber-300' : 'border-slate-700 bg-slate-800 text-slate-400'}">Pit automático</button>
+        </div>
+      </div>
+    `;
+  }).join('');
   return `
     <div class="h-full flex flex-col p-3 sm:p-4 overflow-hidden">
       <div class="shrink-0 text-center mb-3">
@@ -2865,7 +2913,8 @@ function renderLiveReadyCheckScreen(state) {
         <p class="cm-body text-xs text-slate-500 mt-1">Precisa de pelo menos 2 prontos pra começar.</p>
       </div>
       <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto">
-        <div class="cm-mono text-xs text-slate-500 mb-1">PRONTOS (${count})</div>
+        ${!amReady ? `<div class="cm-mono text-xs text-amber-400 mb-1">SUA ESTRATÉGIA DE LARGADA</div>${picker}` : ''}
+        <div class="cm-mono text-xs text-slate-500 mb-1 mt-2">PRONTOS (${count})</div>
         <div class="bg-slate-900 border border-slate-800 rounded-md mb-3">${rows || '<div class="p-3 text-xs text-slate-500">Ninguém pronto ainda.</div>'}</div>
       </div>
       <div class="shrink-0 space-y-2">
@@ -3220,7 +3269,10 @@ async function markLiveRaceReady(state) {
   if (!firebaseReady() || !state.liveRace) return;
   const code = state.career.onlineLeague.code;
   try {
-    await firebaseDb.ref(`leagues/${code}/liveRace/${state.liveRace.round}/ready/${state.playerTeamId}`).set({ playerName: state.career.managerName || 'Chefe' });
+    await firebaseDb.ref(`leagues/${code}/liveRace/${state.liveRace.round}/ready/${state.playerTeamId}`).set({
+      playerName: state.career.managerName || 'Chefe',
+      tireChoice: state.preRaceTireChoice || {},
+    });
   } catch (e) {}
 }
 
@@ -3259,12 +3311,14 @@ function broadcastRaceState(code, round) {
 }
 
 function runHostRace(code, round) {
-  const participantTeamIds = Object.keys((state.liveRace && state.liveRace.readyTeams) || {});
+  const readyTeams = (state.liveRace && state.liveRace.readyTeams) || {};
+  const participantTeamIds = Object.keys(readyTeams);
   dispatch({ type: 'CAREER_START_RACE' });
   dispatch({ type: 'SET_PRERACE_TIRE', role: 'race1', compound: 'medium' });
   dispatch({ type: 'SET_PRERACE_TIRE', role: 'race2', compound: 'medium' });
   dispatch({ type: 'START_RACE' });
   dispatch({ type: 'LIVE_RACE_MARK_PARTICIPANTS', teamIds: participantTeamIds });
+  dispatch({ type: 'LIVE_RACE_APPLY_PRERACE_CHOICES', readyTeams });
   dispatch({ type: 'TOGGLE_AUTOPLAY' });
   broadcastRaceState(code, round);
   decisionsListenerRef = firebaseDb.ref(`leagues/${code}/liveRace/${round}/decisions`);

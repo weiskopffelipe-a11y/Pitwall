@@ -1212,11 +1212,109 @@ const initialState = {
   leagueStandingsData: null, leagueStandingsLoading: false, leagueStandingsError: null, leagueJoinError: null,
   onlineSetup: { code: null, playerName: '', takenTeams: {}, error: null, loading: false },
   onlineLobbyPlayers: null,
+  liveRace: null,
   contractUI: { targetCode: null, salary: 0, years: 1, targetRole: null, lastCounter: null, lastMessage: null },
 };
 
 function currentTeamsList(state) {
   return state.mode === 'career' ? deriveTeamsListFromCareer(state.career) : TEAMS;
+}
+
+function applyCareerRaceFinishForTeams(career, finalCars, teamIds) {
+  const applied = applyCareerRaceResults(career, finalCars);
+  let teams = { ...career.teams };
+  let driverPool = { ...career.driverPool };
+  let log = career.log;
+  teamIds.forEach(teamId => {
+    if (!teams[teamId]) return;
+    const teamClone = { ...teams[teamId] };
+    const sponsorResult = processSponsorDealsAfterRace(teamClone, finalCars, teamId);
+    teamClone.sponsorDeals = sponsorResult.deals;
+    const salaryTotal = teamClone.driverCodes.reduce((sum, code) => {
+      const d = driverPool[code];
+      return sum + (d ? (d.salary || 0) : 0);
+    }, 0);
+    teamClone.budget -= salaryTotal;
+    const devInvest = teamClone.devInvest || {};
+    const devSpend = UPGRADE_CATEGORIES.reduce((sum, c) => sum + (devInvest[c.id] || 0), 0);
+    teamClone.budget -= devSpend;
+    const newDevLevels = { ...(teamClone.devLevels || {}) };
+    UPGRADE_CATEGORIES.forEach(c => {
+      const invest = devInvest[c.id] || 0;
+      const lvl = newDevLevels[c.id] != null ? newDevLevels[c.id] : DEV_BASELINE;
+      const growth = invest * DEV_GROWTH_RATE * (1 - lvl / 100);
+      newDevLevels[c.id] = clamp(lvl + growth, 0, 100);
+    });
+    teamClone.devLevels = newDevLevels;
+    let racePrize = 0;
+    finalCars.forEach(c => {
+      if (c.teamId === teamId && !c.dnf && c.position >= 1 && c.position <= 10) racePrize += RACE_PRIZE_MONEY[c.position - 1];
+    });
+    teamClone.budget += racePrize;
+    finalCars.forEach(c => {
+      if (c.teamId !== teamId) return;
+      const d = driverPool[c.code];
+      if (!d) return;
+      let delta = 0;
+      if (c.dnf) delta = -4;
+      else if (c.position <= 3) delta = 6;
+      else if (c.position <= 6) delta = 3;
+      else if (c.position <= 10) delta = 1;
+      else delta = -2;
+      driverPool[c.code] = { ...d, happiness: clamp((d.happiness == null ? 65 : d.happiness) + delta + (Math.random() * 2 - 1), 0, 100) };
+    });
+    teams[teamId] = teamClone;
+    if (sponsorResult.log.length) log = [...log, ...sponsorResult.log].slice(-40);
+  });
+  const newCareer = { ...career, driverStandings: applied.newDriverStandings, constructorStandings: applied.newConstructorStandings, teams, driverPool, log, raceSequence: career.raceSequence + 1 };
+  return { career: newCareer, applied };
+}
+
+function applyCareerRaceFinish(state, finalCars) {
+  const applied = applyCareerRaceResults(state.career, finalCars);
+  const teamClone = { ...state.career.teams[state.playerTeamId] };
+  const sponsorResult = processSponsorDealsAfterRace(teamClone, finalCars, state.playerTeamId);
+  teamClone.sponsorDeals = sponsorResult.deals;
+  const salaryTotal = teamClone.driverCodes.reduce((sum, code) => {
+    const d = state.career.driverPool[code];
+    return sum + (d ? (d.salary || 0) : 0);
+  }, 0);
+  teamClone.budget -= salaryTotal;
+  const devInvest = teamClone.devInvest || {};
+  const devSpend = UPGRADE_CATEGORIES.reduce((sum, c) => sum + (devInvest[c.id] || 0), 0);
+  teamClone.budget -= devSpend;
+  const newDevLevels = { ...(teamClone.devLevels || {}) };
+  UPGRADE_CATEGORIES.forEach(c => {
+    const invest = devInvest[c.id] || 0;
+    const lvl = newDevLevels[c.id] != null ? newDevLevels[c.id] : DEV_BASELINE;
+    const growth = invest * DEV_GROWTH_RATE * (1 - lvl / 100);
+    newDevLevels[c.id] = clamp(lvl + growth, 0, 100);
+  });
+  teamClone.devLevels = newDevLevels;
+  let racePrize = 0;
+  finalCars.forEach(c => {
+    if (c.teamId === state.playerTeamId && !c.dnf && c.position >= 1 && c.position <= 10) {
+      racePrize += RACE_PRIZE_MONEY[c.position - 1];
+    }
+  });
+  teamClone.budget += racePrize;
+  const driverPool = { ...state.career.driverPool };
+  finalCars.forEach(c => {
+    if (c.teamId !== state.playerTeamId) return;
+    const d = driverPool[c.code];
+    if (!d) return;
+    let delta = 0;
+    if (c.dnf) delta = -4;
+    else if (c.position <= 3) delta = 6;
+    else if (c.position <= 6) delta = 3;
+    else if (c.position <= 10) delta = 1;
+    else delta = -2;
+    driverPool[c.code] = { ...d, happiness: clamp((d.happiness == null ? 65 : d.happiness) + delta + (Math.random() * 2 - 1), 0, 100) };
+  });
+  const teams = { ...state.career.teams, [state.playerTeamId]: teamClone };
+  const log = sponsorResult.log.length ? [...state.career.log, ...sponsorResult.log].slice(-40) : state.career.log;
+  const career = { ...state.career, driverStandings: applied.newDriverStandings, constructorStandings: applied.newConstructorStandings, teams, driverPool, log, raceSequence: state.career.raceSequence + 1 };
+  return { career, careerLastRaceApplied: { ...applied, salaryPaid: salaryTotal } };
 }
 
 function reducer(state, action) {
@@ -1265,11 +1363,72 @@ function reducer(state, action) {
       return { ...state, phase: 'online-lobby', onlineSetup: { ...state.onlineSetup, teamId: action.teamId } };
     case 'ONLINE_LOBBY_UPDATE':
       return { ...state, onlineLobbyPlayers: action.players };
+    case 'SHARED_CAREER_ADOPT':
+      return { ...state, career: action.career, phase: 'career-race-result' };
+    case 'SHARED_OFFSEASON_ADOPT':
+      return { ...state, career: action.career, phase: 'career-offseason' };
     case 'ONLINE_START_SESSION': {
-      const career = initCareerState(action.teamId);
-      career.managerName = (state.onlineSetup.playerName || 'Chefe').slice(0, 30);
-      career.onlineLeague = { code: state.onlineSetup.code, playerName: career.managerName };
+      let career;
+      if (action.sharedCareer) {
+        career = { ...action.sharedCareer };
+      } else {
+        career = initCareerState(action.teamId);
+        career.onlineLeague = { code: state.onlineSetup.code, playerName: (state.onlineSetup.playerName || 'Chefe').slice(0, 30) };
+      }
+      career.managerName = career.managerName || (state.onlineSetup.playerName || 'Chefe').slice(0, 30);
       return { ...state, mode: 'career', playerTeamId: action.teamId, career, phase: 'career-hub', onlineLobbyPlayers: null };
+    }
+    case 'LIVE_RACE_MARK_PARTICIPANTS':
+      return { ...state, grid: state.grid.map(c => (action.teamIds.includes(c.teamId) ? { ...c, isPlayer: true } : c)) };
+    case 'LIVE_RACE_ENTER':
+      return { ...state, phase: 'live-ready-check', liveRace: { round: action.round, readyTeams: {}, isHost: false, hostTeamId: null, phase: 'ready-check' } };
+    case 'LIVE_RACE_READY_UPDATE':
+      if (!state.liveRace) return state;
+      return { ...state, liveRace: { ...state.liveRace, readyTeams: action.readyTeams || {} } };
+    case 'LIVE_RACE_CANCEL':
+      return { ...state, phase: 'career-hub', liveRace: null };
+    case 'LIVE_RACE_ELECTED_HOST':
+      if (!state.liveRace) return state;
+      return { ...state, liveRace: { ...state.liveRace, isHost: true, hostTeamId: state.playerTeamId, phase: 'racing' } };
+    case 'LIVE_RACE_JOINED_AS_GUEST':
+      if (!state.liveRace) return state;
+      return { ...state, liveRace: { ...state.liveRace, isHost: false, hostTeamId: action.hostTeamId, phase: 'racing' } };
+    case 'LIVE_RACE_GUEST_INIT': {
+      if (!state.liveRace) return state;
+      return {
+        ...state, phase: 'race',
+        grid: action.data.grid, lap: action.data.lap, flag: action.data.flag,
+        flagLapsRemaining: action.data.flagLapsRemaining, weather: action.data.weather,
+        circuit: action.data.circuit, totalLaps: action.data.circuit ? action.data.circuit.laps : state.totalLaps,
+        eventLog: action.data.eventLog || [], prevPositions: action.data.prevPositions || {},
+        playerCarIds: action.data.grid.filter(c => c.teamId === state.playerTeamId && (c.role === 'race1' || c.role === 'race2')).map(c => c.id),
+        history: action.data.history || [], autoPlay: false, speed: 1,
+      };
+    }
+    case 'LIVE_RACE_GUEST_SYNC':
+      return {
+        ...state, grid: action.data.grid, lap: action.data.lap, flag: action.data.flag,
+        flagLapsRemaining: action.data.flagLapsRemaining, weather: action.data.weather,
+        eventLog: action.data.eventLog || state.eventLog, prevPositions: action.data.prevPositions || state.prevPositions,
+        history: action.data.history || state.history,
+      };
+    case 'LIVE_RACE_APPLY_DECISION': {
+      const validPace = action.paceMode && PACE_MODES[action.paceMode] ? action.paceMode : null;
+      const validPit = action.pendingPit === null ? null : (action.pendingPit && COMPOUNDS[action.pendingPit] ? action.pendingPit : undefined);
+      const grid = state.grid.map(c => (c.id === action.carId)
+        ? { ...c, ...(validPace ? { paceMode: validPace } : {}), ...(validPit !== undefined ? { pendingPit: validPit } : {}) }
+        : c);
+      return { ...state, grid };
+    }
+    case 'LIVE_RACE_END':
+      return { ...state, liveRace: null };
+    case 'LIVE_RACE_APPLY_RESULT': {
+      const { career, careerLastRaceApplied } = applyCareerRaceFinish(state, action.finalCars);
+      return { ...state, career, careerLastRaceApplied, phase: 'career-race-result', liveRace: null };
+    }
+    case 'LIVE_RACE_APPLY_SHARED_RESULT': {
+      const { career } = applyCareerRaceFinishForTeams(state.career, action.finalCars, action.teamIds);
+      return { ...state, career, careerLastRaceApplied: { finalCars: action.finalCars }, phase: 'career-race-result', liveRace: null };
     }
     case 'SET_ONLINE_LEAGUE':
       return { ...state, career: { ...state.career, onlineLeague: { code: action.code, playerName: action.playerName || 'Chefe', joined: true } } };
@@ -1329,6 +1488,9 @@ function reducer(state, action) {
         }
         advanced = { ...advanced, roundsSinceSponsorOffer: (advanced.roundsSinceSponsorOffer || 0) + 1 };
         return { ...state, career: advanced, phase: 'career-hub', careerLastRaceApplied: null };
+      }
+      if (career.onlineLeague) {
+        return { ...state, phase: 'career-offseason-sync', careerLastRaceApplied: null };
       }
       const off = processOffseason(career);
       return { ...state, career: { ...career, ...off }, phase: 'career-offseason', careerLastRaceApplied: null };
@@ -1497,51 +1659,18 @@ function reducer(state, action) {
       };
       if (finished) {
         if (state.mode === 'career') {
-          const applied = applyCareerRaceResults(state.career, result.finalCars);
-          const teamClone = { ...state.career.teams[state.playerTeamId] };
-          const sponsorResult = processSponsorDealsAfterRace(teamClone, result.finalCars, state.playerTeamId);
-          teamClone.sponsorDeals = sponsorResult.deals;
-          const salaryTotal = teamClone.driverCodes.reduce((sum, code) => {
-            const d = state.career.driverPool[code];
-            return sum + (d ? (d.salary || 0) : 0);
-          }, 0);
-          teamClone.budget -= salaryTotal;
-          const devInvest = teamClone.devInvest || {};
-          const devSpend = UPGRADE_CATEGORIES.reduce((sum, c) => sum + (devInvest[c.id] || 0), 0);
-          teamClone.budget -= devSpend;
-          const newDevLevels = { ...(teamClone.devLevels || {}) };
-          UPGRADE_CATEGORIES.forEach(c => {
-            const invest = devInvest[c.id] || 0;
-            const lvl = newDevLevels[c.id] != null ? newDevLevels[c.id] : DEV_BASELINE;
-            const growth = invest * DEV_GROWTH_RATE * (1 - lvl / 100);
-            newDevLevels[c.id] = clamp(lvl + growth, 0, 100);
-          });
-          teamClone.devLevels = newDevLevels;
-          let racePrize = 0;
-          result.finalCars.forEach(c => {
-            if (c.teamId === state.playerTeamId && !c.dnf && c.position >= 1 && c.position <= 10) {
-              racePrize += RACE_PRIZE_MONEY[c.position - 1];
-            }
-          });
-          teamClone.budget += racePrize;
-          const driverPool = { ...state.career.driverPool };
-          result.finalCars.forEach(c => {
-            if (c.teamId !== state.playerTeamId) return;
-            const d = driverPool[c.code];
-            if (!d) return;
-            let delta = 0;
-            if (c.dnf) delta = -4;
-            else if (c.position <= 3) delta = 6;
-            else if (c.position <= 6) delta = 3;
-            else if (c.position <= 10) delta = 1;
-            else delta = -2;
-            driverPool[c.code] = { ...d, happiness: clamp((d.happiness == null ? 65 : d.happiness) + delta + (Math.random() * 2 - 1), 0, 100) };
-          });
-          const teams = { ...state.career.teams, [state.playerTeamId]: teamClone };
-          const log = sponsorResult.log.length ? [...state.career.log, ...sponsorResult.log].slice(-40) : state.career.log;
-          nextState.career = { ...state.career, driverStandings: applied.newDriverStandings, constructorStandings: applied.newConstructorStandings, teams, driverPool, log, raceSequence: state.career.raceSequence + 1 };
-          nextState.careerLastRaceApplied = { ...applied, salaryPaid: salaryTotal };
-          nextState.phase = 'career-race-result';
+          if (state.liveRace && state.liveRace.isHost) {
+            const teamIds = Object.keys(state.liveRace.readyTeams || { [state.playerTeamId]: true });
+            const { career } = applyCareerRaceFinishForTeams(state.career, result.finalCars, teamIds);
+            nextState.career = career;
+            nextState.careerLastRaceApplied = { finalCars: result.finalCars };
+            nextState.phase = 'career-race-result';
+          } else {
+            const { career, careerLastRaceApplied } = applyCareerRaceFinish(state, result.finalCars);
+            nextState.career = career;
+            nextState.careerLastRaceApplied = careerLastRaceApplied;
+            nextState.phase = 'career-race-result';
+          }
         } else {
           nextState.phase = 'results';
         }
@@ -1651,7 +1780,7 @@ function renderStatusBar(lap, totalLaps, flag, weather, roundLabel) {
   `;
 }
 
-function renderDriverCard(car, weather) {
+function renderDriverCard(car, weather, isGuest) {
   if (!car) return '';
   const wet = weather.condition !== 'dry';
   const infoRow = `
@@ -1669,13 +1798,13 @@ function renderDriverCard(car, weather) {
   if (car.dnf) return `<div class="bg-slate-900 border border-slate-800 rounded-md p-2">${infoRow}<div class="cm-body text-xs text-red-400">Abandonou — ${car.dnfReason}</div></div>`;
   const tyreRow = `<div class="flex items-center gap-1.5 mb-1.5">${compoundDot(car.compound)}${wearBar(car.compound, car.tyreWear, 'flex-1')}</div>`;
   const paceButtons = Object.entries(PACE_MODES).map(([key, mode]) => `
-    <button data-action="${act({ type: 'SET_PACE_MODE', carId: car.id, mode: key })}" class="cm-body text-xs py-1.5 rounded border ${car.paceMode === key ? 'bg-amber-500 border-amber-400 text-slate-950 font-semibold' : 'bg-slate-800 border-slate-700 text-slate-300'}">${mode.label}</button>
+    <button ${isGuest ? `data-guest-pace="${car.id}" data-guest-pace-mode="${key}"` : `data-action="${act({ type: 'SET_PACE_MODE', carId: car.id, mode: key })}"`} class="cm-body text-xs py-1.5 rounded border ${car.paceMode === key ? 'bg-amber-500 border-amber-400 text-slate-950 font-semibold' : 'bg-slate-800 border-slate-700 text-slate-300'}">${mode.label}</button>
   `).join('');
   const compoundButtons = Object.entries(COMPOUNDS).map(([key, cd]) => {
     const mismatched = wet ? !cd.wetOk : cd.wetOk;
-    return `<button data-action="${act({ type: 'QUEUE_PIT', carId: car.id, compound: key })}" class="cm-mono text-xs px-1.5 py-1 rounded bg-slate-800 flex-1 ${car.pendingPit === key ? 'border-2 border-amber-400' : 'border border-slate-700'} ${mismatched ? 'opacity-40' : ''}" style="color:${cd.color}">${cd.short}</button>`;
+    return `<button ${isGuest ? `data-guest-pit="${car.id}" data-guest-pit-compound="${key}"` : `data-action="${act({ type: 'QUEUE_PIT', carId: car.id, compound: key })}"`} class="cm-mono text-xs px-1.5 py-1 rounded bg-slate-800 flex-1 ${car.pendingPit === key ? 'border-2 border-amber-400' : 'border border-slate-700'} ${mismatched ? 'opacity-40' : ''}" style="color:${cd.color}">${cd.short}</button>`;
   }).join('');
-  const cancelButton = car.pendingPit ? `<button data-action="${act({ type: 'CANCEL_PIT', carId: car.id })}" class="cm-body text-xs px-1.5 py-1 rounded border border-slate-700 text-slate-400">✕</button>` : '';
+  const cancelButton = car.pendingPit ? `<button ${isGuest ? `data-guest-pit="${car.id}" data-guest-pit-compound=""` : `data-action="${act({ type: 'CANCEL_PIT', carId: car.id })}"`} class="cm-body text-xs px-1.5 py-1 rounded border border-slate-700 text-slate-400">✕</button>` : '';
   return `<div class="bg-slate-900 border border-slate-800 rounded-md p-2">${infoRow}${tyreRow}<div class="grid grid-cols-3 gap-1 mb-1">${paceButtons}</div><div class="flex gap-1">${compoundButtons}${cancelButton}</div></div>`;
 }
 
@@ -2083,12 +2212,16 @@ function renderRaceScreen(state) {
   const lapsRemaining = state.totalLaps - state.lap;
   const needsSecondCompound = playerCars.some(c => !c.dnf && state.weather.condition === 'dry' && c.compoundsUsed.length < 2 && lapsRemaining < 12 && lapsRemaining > 0);
   const roundLabel = state.mode === 'career' ? `Rodada ${state.career.roundIndex + 1}/${state.career.calendar.length} · ${state.career.year}` : null;
+  const isGuest = !!(state.liveRace && !state.liveRace.isHost);
+  const isLiveHostRace = !!(state.liveRace && state.liveRace.isHost);
+  const liveTag = state.liveRace ? `<div class="shrink-0 bg-emerald-900 border-b border-emerald-700 px-3 py-1 text-center cm-mono text-[10px] text-emerald-300">🌐 CORRIDA AO VIVO ${isGuest ? '— assistindo em tempo real' : '— você está comandando o ritmo'}</div>` : '';
   return `
     <div class="h-full flex flex-col overflow-hidden">
+      ${liveTag}
       ${renderStatusBar(state.lap, state.totalLaps, state.flag, state.weather, roundLabel)}
       <div class="flex-1 min-h-0 flex flex-col sm:flex-row overflow-hidden">
         <div class="sm:w-80 sm:shrink-0 shrink-0 sm:h-full sm:overflow-y-auto">
-          <div class="grid grid-cols-1 sm:grid-cols-1 gap-2 px-2 pt-2">${playerCars.map(c => renderDriverCard(c, state.weather)).join('')}</div>
+          <div class="grid grid-cols-1 sm:grid-cols-1 gap-2 px-2 pt-2">${playerCars.map(c => renderDriverCard(c, state.weather, isGuest)).join('')}</div>
           ${renderRainForecast(state)}
           ${needsSecondCompound ? '<div class="cm-body text-xs text-amber-400 px-3 pt-1">⚠ é preciso usar 2 compostos diferentes na corrida (pista seca).</div>' : ''}
           ${renderGapChart(state.history, state.grid, state.playerCarIds)}
@@ -2096,7 +2229,8 @@ function renderRaceScreen(state) {
         </div>
         <div class="flex-1 min-h-0 px-2 py-2">${renderTimingTower(state.grid)}</div>
       </div>
-      ${renderPlaybackBar(state.autoPlay, state.speed, state.lap)}
+      ${isGuest ? `<div class="shrink-0 safe-bottom bg-slate-950 border-t border-slate-800 px-3 py-3 text-center cm-body text-xs text-slate-400">Só quem está comandando o ritmo pode pausar/avançar — sua estratégia (ritmo e pit stop) continua valendo.</div>` : renderPlaybackBar(state.autoPlay, state.speed, state.lap)}
+      ${isLiveHostRace && !isGuest ? `<div class="shrink-0 bg-slate-950 px-3 pb-2 text-center cm-body text-[10px] text-slate-600">Como anfitrião, você controla o andamento da corrida pra todo mundo.</div>` : ''}
     </div>
   `;
 }
@@ -2222,7 +2356,7 @@ function renderCareerHubScreen(state) {
         <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 mb-3" style="border-top-color:${team.color}; border-top-width:3px;">
           <div class="cm-mono text-xs text-slate-500 mb-1">PRÓXIMA CORRIDA — RODADA ${career.roundIndex + 1}/${career.calendar.length}</div>
           <div class="cm-display text-xl font-bold text-slate-100 mb-2">${CIRCUIT_FLAGS[nextCircuit.id]} ${nextCircuit.name}</div>
-          <button data-action="${act({ type: 'CAREER_START_RACE' })}" class="w-full bg-amber-500 text-slate-950 cm-body font-semibold py-2.5 rounded-md">🏁 Ir para o GP</button>
+          <button ${career.onlineLeague ? 'data-live-race-enter="1"' : `data-action="${act({ type: 'CAREER_START_RACE' })}"`} class="w-full bg-amber-500 text-slate-950 cm-body font-semibold py-2.5 rounded-md">🏁 ${career.onlineLeague ? 'Ir para o GP (ao vivo)' : 'Ir para o GP'}</button>
         </div>
         <div class="grid grid-cols-2 gap-2 mb-3">
           <div class="bg-slate-900 border border-slate-800 rounded-md p-2.5"><div class="cm-mono text-xs text-slate-500">PILOTOS</div><div class="cm-display text-lg font-bold text-cyan-300">P${myBestPos}</div></div>
@@ -2714,6 +2848,34 @@ function renderCareerProfileScreen(state) {
   `;
 }
 
+function renderLiveReadyCheckScreen(state) {
+  const lr = state.liveRace;
+  const ready = lr ? lr.readyTeams || {} : {};
+  const count = Object.keys(ready).length;
+  const amReady = !!ready[state.playerTeamId];
+  const rows = Object.entries(ready).map(([teamId, p]) => {
+    const team = TEAMS.find(t => t.id === teamId);
+    return `<div class="flex items-center gap-2 px-3 py-2 border-b border-slate-800 last:border-b-0">${team ? teamBadge(team, 24) : ''}<span class="cm-body text-sm text-slate-100">${team ? team.short : teamId}</span><span class="cm-body text-xs text-slate-500">— ${p.playerName}</span></div>`;
+  }).join('');
+  return `
+    <div class="h-full flex flex-col p-3 sm:p-4 overflow-hidden">
+      <div class="shrink-0 text-center mb-3">
+        <div class="cm-mono text-xs text-emerald-400 mb-1">🌐 CORRIDA AO VIVO — RODADA ${(lr ? lr.round : 0) + 1}</div>
+        <h2 class="cm-display text-2xl font-bold text-slate-100">Aguardando jogadores</h2>
+        <p class="cm-body text-xs text-slate-500 mt-1">Precisa de pelo menos 2 prontos pra começar.</p>
+      </div>
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto">
+        <div class="cm-mono text-xs text-slate-500 mb-1">PRONTOS (${count})</div>
+        <div class="bg-slate-900 border border-slate-800 rounded-md mb-3">${rows || '<div class="p-3 text-xs text-slate-500">Ninguém pronto ainda.</div>'}</div>
+      </div>
+      <div class="shrink-0 space-y-2">
+        <button data-live-ready="1" ${amReady ? 'disabled' : ''} class="w-full ${amReady ? 'bg-slate-800 text-slate-500' : 'bg-emerald-600 text-white'} cm-body font-semibold py-3 rounded-md">${amReady ? '✓ Você está pronto — aguardando...' : 'Estou pronto!'}</button>
+        <button data-live-cancel="1" class="w-full text-slate-500 cm-body text-xs py-2">Cancelar e voltar</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderOnlineLeagueScreen(state) {
   const career = state.career;
   const league = career.onlineLeague;
@@ -2790,6 +2952,16 @@ function renderCareerNewsScreen(state) {
   `;
 }
 
+function renderOffseasonSyncScreen(state) {
+  return `
+    <div class="h-full flex flex-col items-center justify-center p-4 text-center">
+      <div class="cm-mono text-xs text-emerald-400 mb-2">🌐 SINCRONIZANDO</div>
+      <div class="cm-display text-xl font-bold text-slate-100 mb-2">Fechando a temporada ${state.career.year}...</div>
+      <p class="cm-body text-sm text-slate-500">Aguardando o resultado da entressafra compartilhada entre todos.</p>
+    </div>
+  `;
+}
+
 function renderCareerOffseasonScreen(state) {
   const career = state.career;
   const lastSeason = career.seasonHistory[career.seasonHistory.length - 1];
@@ -2861,6 +3033,7 @@ function renderApp(state) {
   if (p === 'career-hub') return renderCareerHubScreen(state);
   if (p === 'career-news') return renderCareerNewsScreen(state);
   if (p === 'career-league') return renderOnlineLeagueScreen(state);
+  if (p === 'live-ready-check') return renderLiveReadyCheckScreen(state);
   if (p === 'career-calendar') return renderCareerCalendarScreen(state);
   if (p === 'career-standings') return renderCareerStandingsScreen(state);
   if (p === 'career-contracts') return renderCareerContractsScreen(state);
@@ -2871,6 +3044,7 @@ function renderApp(state) {
   if (p === 'career-roster') return renderCareerRosterScreen(state);
   if (p === 'career-profile') return renderCareerProfileScreen(state);
   if (p === 'career-offseason') return renderCareerOffseasonScreen(state);
+  if (p === 'career-offseason-sync') return renderOffseasonSyncScreen(state);
   if (p === 'career-race-result') return renderCareerRaceResultScreen(state);
   return `<div class="h-full flex items-center justify-center cm-body text-slate-500">tela desconhecida: ${p}</div>`;
 }
@@ -2997,9 +3171,170 @@ async function pickOnlineTeam(state, teamId) {
     const existing = await firebaseDb.ref(`leagues/${code}/teams/${teamId}`).get();
     if (existing.exists()) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Essa equipe acabou de ser escolhida por outra pessoa — escolha outra.' }); return; }
     await firebaseDb.ref(`leagues/${code}/teams/${teamId}`).set({ playerName: state.onlineSetup.playerName, joinedAt: Date.now() });
+    const careerSnap = await firebaseDb.ref(`leagues/${code}/sharedCareer`).get();
+    if (!careerSnap.exists()) {
+      const freshCareer = initCareerState(teamId);
+      freshCareer.managerName = state.onlineSetup.playerName;
+      freshCareer.onlineLeague = { code, playerName: state.onlineSetup.playerName };
+      await firebaseDb.ref(`leagues/${code}/sharedCareer`).set(freshCareer);
+    }
     dispatch({ type: 'ONLINE_TEAM_JOINED', teamId });
     startLobbyListener(code);
   } catch (e) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Erro ao escolher equipe: ' + e.message }); }
+}
+
+// ---- corrida ao vivo compartilhada (opcional, via Firebase) ----
+let readyListenerRef = null;
+let decisionsListenerRef = null;
+let broadcastListenerRef = null;
+let electionAttempted = false;
+let isLiveHost = false;
+
+function stopReadyListener() { if (readyListenerRef) { try { readyListenerRef.off(); } catch (e) {} readyListenerRef = null; } }
+function stopDecisionsListener() { if (decisionsListenerRef) { try { decisionsListenerRef.off(); } catch (e) {} decisionsListenerRef = null; } }
+function stopBroadcastListener() { if (broadcastListenerRef) { try { broadcastListenerRef.off(); } catch (e) {} broadcastListenerRef = null; } }
+function stopAllLiveRaceListeners() { stopReadyListener(); stopDecisionsListener(); stopBroadcastListener(); stopSharedCareerListener(); isLiveHost = false; }
+
+function enterLiveRace(state) {
+  if (!state.career.onlineLeague) return;
+  const round = state.career.roundIndex;
+  electionAttempted = false;
+  isLiveHost = false;
+  dispatch({ type: 'LIVE_RACE_ENTER', round });
+  if (!firebaseReady()) return;
+  const code = state.career.onlineLeague.code;
+  stopReadyListener();
+  readyListenerRef = firebaseDb.ref(`leagues/${code}/liveRace/${round}/ready`);
+  readyListenerRef.on('value', (snap) => {
+    const readyTeams = snap.exists() ? snap.val() : {};
+    dispatch({ type: 'LIVE_RACE_READY_UPDATE', readyTeams });
+    const count = Object.keys(readyTeams).length;
+    if (count >= 2 && readyTeams[state.playerTeamId] && !electionAttempted) {
+      electionAttempted = true;
+      setTimeout(() => attemptHostElection(state, code, round), 1200);
+    }
+  });
+}
+
+async function markLiveRaceReady(state) {
+  if (!firebaseReady() || !state.liveRace) return;
+  const code = state.career.onlineLeague.code;
+  try {
+    await firebaseDb.ref(`leagues/${code}/liveRace/${state.liveRace.round}/ready/${state.playerTeamId}`).set({ playerName: state.career.managerName || 'Chefe' });
+  } catch (e) {}
+}
+
+function cancelLiveRace() {
+  stopAllLiveRaceListeners();
+  dispatch({ type: 'LIVE_RACE_CANCEL' });
+}
+
+async function attemptHostElection(state, code, round) {
+  try {
+    const hostRef = firebaseDb.ref(`leagues/${code}/liveRace/${round}/hostTeamId`);
+    const result = await hostRef.transaction((current) => (current === null || current === undefined) ? state.playerTeamId : undefined);
+    const finalHostId = result.snapshot.val();
+    stopReadyListener();
+    if (finalHostId === state.playerTeamId) {
+      isLiveHost = true;
+      dispatch({ type: 'LIVE_RACE_ELECTED_HOST' });
+      runHostRace(code, round);
+    } else {
+      isLiveHost = false;
+      dispatch({ type: 'LIVE_RACE_JOINED_AS_GUEST', hostTeamId: finalHostId });
+      startGuestListener(code, round);
+    }
+  } catch (e) { dispatch({ type: 'ONLINE_SETUP_ERROR', message: 'Erro ao iniciar corrida: ' + e.message }); }
+}
+
+function broadcastRaceState(code, round) {
+  if (!firebaseReady()) return;
+  const s = state;
+  firebaseDb.ref(`leagues/${code}/liveRace/${round}/broadcast`).set({
+    grid: s.grid, lap: s.lap, flag: s.flag, flagLapsRemaining: s.flagLapsRemaining,
+    weather: s.weather, circuit: s.circuit, eventLog: (s.eventLog || []).slice(-30),
+    prevPositions: s.prevPositions || {}, history: (s.history || []).slice(-30),
+    finished: s.phase === 'career-race-result',
+  }).catch(() => {});
+}
+
+function runHostRace(code, round) {
+  const participantTeamIds = Object.keys((state.liveRace && state.liveRace.readyTeams) || {});
+  dispatch({ type: 'CAREER_START_RACE' });
+  dispatch({ type: 'SET_PRERACE_TIRE', role: 'race1', compound: 'medium' });
+  dispatch({ type: 'SET_PRERACE_TIRE', role: 'race2', compound: 'medium' });
+  dispatch({ type: 'START_RACE' });
+  dispatch({ type: 'LIVE_RACE_MARK_PARTICIPANTS', teamIds: participantTeamIds });
+  dispatch({ type: 'TOGGLE_AUTOPLAY' });
+  broadcastRaceState(code, round);
+  decisionsListenerRef = firebaseDb.ref(`leagues/${code}/liveRace/${round}/decisions`);
+  decisionsListenerRef.on('value', (snap) => {
+    if (!snap.exists()) return;
+    const decisions = snap.val();
+    Object.values(decisions).forEach((d) => {
+      if (!d || !d.carId) return;
+      const car = state.grid.find(c => c.id === d.carId);
+      if (!car || car.teamId === state.playerTeamId) return;
+      dispatch({ type: 'LIVE_RACE_APPLY_DECISION', carId: d.carId, paceMode: d.paceMode, pendingPit: d.pendingPit });
+    });
+  });
+}
+
+function pushSharedCareer(code, career) {
+  if (!firebaseReady()) return;
+  firebaseDb.ref(`leagues/${code}/sharedCareer`).set(career).catch(() => {});
+}
+
+async function fetchSharedCareer(code) {
+  if (!firebaseReady()) return null;
+  try {
+    const snap = await firebaseDb.ref(`leagues/${code}/sharedCareer`).get();
+    return snap.exists() ? snap.val() : null;
+  } catch (e) { return null; }
+}
+
+let sharedCareerListenerRef = null;
+function stopSharedCareerListener() { if (sharedCareerListenerRef) { try { sharedCareerListenerRef.off(); } catch (e) {} sharedCareerListenerRef = null; } }
+
+function startGuestListener(code, round) {
+  broadcastListenerRef = firebaseDb.ref(`leagues/${code}/liveRace/${round}/broadcast`);
+  let initialized = false;
+  let waitingForResult = false;
+  const expectedRaceSequence = (state.career.raceSequence || 0) + 1;
+  broadcastListenerRef.on('value', (snap) => {
+    if (!snap.exists()) return;
+    const data = snap.val();
+    if (!initialized) {
+      initialized = true;
+      dispatch({ type: 'LIVE_RACE_GUEST_INIT', data });
+    } else if (!data.finished) {
+      dispatch({ type: 'LIVE_RACE_GUEST_SYNC', data });
+    }
+    if (data.finished && !waitingForResult) {
+      waitingForResult = true;
+      stopBroadcastListener();
+      sharedCareerListenerRef = firebaseDb.ref(`leagues/${code}/sharedCareer`);
+      sharedCareerListenerRef.on('value', (careerSnap) => {
+        if (!careerSnap.exists()) return;
+        const shared = careerSnap.val();
+        if (shared.raceSequence === expectedRaceSequence) {
+          stopSharedCareerListener();
+          dispatch({ type: 'SHARED_CAREER_ADOPT', career: shared });
+          dispatch({ type: 'LIVE_RACE_END' });
+        }
+      });
+    }
+  });
+}
+
+function guestSendDecision(state, carId, paceMode, pendingPit) {
+  dispatch({ type: 'LIVE_RACE_APPLY_DECISION', carId, paceMode, pendingPit });
+  if (!firebaseReady() || !state.career.onlineLeague || !state.liveRace) return;
+  const code = state.career.onlineLeague.code;
+  const safeCarId = carId.replace(/[.#$/\[\]]/g, '_');
+  firebaseDb.ref(`leagues/${code}/liveRace/${state.liveRace.round}/decisions/${safeCarId}`).set({
+    carId, paceMode: paceMode || null, pendingPit: pendingPit !== undefined ? pendingPit : null,
+  }).catch(() => {});
 }
 
 const SAVE_KEY = 'pitwallManagerSaveV1';
@@ -3075,12 +3410,58 @@ const SAVED_CAREER = loadCareerFromStorage();
 let state = { ...initialState };
 let autoplayTimer = null;
 
+async function handleSharedOffseason(code, career) {
+  if (!firebaseReady()) return;
+  const yearKey = career.year;
+  try {
+    const claimRef = firebaseDb.ref(`leagues/${code}/offseasonClaim/${yearKey}`);
+    const result = await claimRef.transaction((current) => (current === null || current === undefined) ? state.playerTeamId : undefined);
+    const claimedBy = result.snapshot.val();
+    if (claimedBy === state.playerTeamId) {
+      const off = processOffseason(career);
+      const newCareer = { ...career, ...off };
+      pushSharedCareer(code, newCareer);
+      dispatch({ type: 'SHARED_OFFSEASON_ADOPT', career: newCareer });
+    } else {
+      const listenerRef = firebaseDb.ref(`leagues/${code}/sharedCareer`);
+      const onUpdate = (snap) => {
+        if (!snap.exists()) return;
+        const shared = snap.val();
+        if (shared.year === yearKey + 1) {
+          listenerRef.off('value', onUpdate);
+          dispatch({ type: 'SHARED_OFFSEASON_ADOPT', career: shared });
+        }
+      };
+      listenerRef.on('value', onUpdate);
+    }
+  } catch (e) {
+    const off = processOffseason(career);
+    dispatch({ type: 'SHARED_OFFSEASON_ADOPT', career: { ...career, ...off } });
+  }
+}
+
 function dispatch(action) {
   if (action.type === 'RESET') clearCareerStorage();
+  const wasRacing = state.phase === 'race';
   state = reducer(state, action);
   saveCareerToStorage(state);
   render();
   if (action.type === 'CAREER_CONTINUE' && state.career && state.career.onlineLeague) pushLeagueResult(state);
+  if (isLiveHost && state.liveRace && state.career && state.career.onlineLeague && (action.type === 'TICK' || action.type === 'CAREER_START_RACE' || action.type === 'START_RACE')) {
+    const code = state.career.onlineLeague.code;
+    const round = state.liveRace.round;
+    broadcastRaceState(code, round);
+    if (wasRacing && state.phase === 'career-race-result') {
+      pushSharedCareer(code, state.career);
+    }
+  }
+  if (isLiveHost && state.phase === 'career-race-result' && state.liveRace) {
+    stopAllLiveRaceListeners();
+    dispatch({ type: 'LIVE_RACE_END' });
+  }
+  if (state.phase === 'career-offseason-sync' && state.career && state.career.onlineLeague) {
+    handleSharedOffseason(state.career.onlineLeague.code, state.career);
+  }
 }
 
 function scheduleAutoplay() {
@@ -3193,10 +3574,32 @@ document.getElementById('root').addEventListener('click', (e) => {
     pickOnlineTeam(state, onlinePickTeamBtn.getAttribute('data-online-pick-team'));
     return;
   }
+  const liveRaceEnterBtn = e.target.closest('[data-live-race-enter]');
+  if (liveRaceEnterBtn) { enterLiveRace(state); return; }
+  const liveReadyBtn = e.target.closest('[data-live-ready]');
+  if (liveReadyBtn) { markLiveRaceReady(state); return; }
+  const liveCancelBtn = e.target.closest('[data-live-cancel]');
+  if (liveCancelBtn) { cancelLiveRace(); return; }
+  const guestPaceBtn = e.target.closest('[data-guest-pace]');
+  if (guestPaceBtn) {
+    guestSendDecision(state, guestPaceBtn.getAttribute('data-guest-pace'), guestPaceBtn.getAttribute('data-guest-pace-mode'), undefined);
+    return;
+  }
+  const guestPitBtn = e.target.closest('[data-guest-pit]');
+  if (guestPitBtn) {
+    const compound = guestPitBtn.getAttribute('data-guest-pit-compound');
+    guestSendDecision(state, guestPitBtn.getAttribute('data-guest-pit'), undefined, compound || null);
+    return;
+  }
   const onlineStartBtn = e.target.closest('[data-online-start]');
   if (onlineStartBtn) {
     const teamId = state.onlineSetup.teamId;
-    if (teamId) { stopLobbyListener(); dispatch({ type: 'ONLINE_START_SESSION', teamId }); }
+    if (teamId) {
+      stopLobbyListener();
+      fetchSharedCareer(state.onlineSetup.code).then(sharedCareer => {
+        dispatch({ type: 'ONLINE_START_SESSION', teamId, sharedCareer });
+      });
+    }
     return;
   }
   const btn = e.target.closest('[data-action]');

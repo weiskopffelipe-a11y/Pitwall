@@ -28,6 +28,17 @@
   .cm-body { font-family: 'Inter', sans-serif; }
   .safe-top { padding-top: max(0.5rem, env(safe-area-inset-top, 0px)); }
   .safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)); }
+
+  /* celular deitado: viewport baixo (iPad em qualquer orientação tem altura bem maior, então não é afetado) */
+  @media (max-height: 480px) {
+    .safe-top { padding-top: max(0.25rem, env(safe-area-inset-top, 0px)); }
+    .safe-bottom { padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px)); }
+    .landscape-compact-py { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+    .landscape-compact-p { padding: 0.375rem !important; }
+    .landscape-tighten { margin-bottom: 0.25rem !important; }
+    .landscape-hide { display: none !important; }
+    .landscape-text-xs { font-size: 0.7rem !important; line-height: 1rem !important; }
+  }
   @keyframes cm-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
   .cm-cursor { animation: cm-blink 1s step-start infinite; }
   @keyframes cm-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
@@ -900,12 +911,13 @@ function clearConflictingPending(driverPool, teamId, role, exceptCode) {
   return next;
 }
 
-function maybeGenerateAiRenewalNews(career) {
+function maybeGenerateAiRenewalNews(career, humanTeamIds) {
   if (Math.random() > 0.22) return null;
+  const excluded = humanTeamIds || [career.playerTeamId];
   const driverPool = career.driverPool;
   const candidates = Object.values(driverPool).filter(d => {
     if (d.retired || d.pendingTeamId !== undefined || !d.teamId) return false;
-    if (d.teamId === career.playerTeamId) return false;
+    if (excluded.includes(d.teamId)) return false;
     if (d.role !== 'race1' && d.role !== 'race2') return false;
     return true;
   });
@@ -916,11 +928,12 @@ function maybeGenerateAiRenewalNews(career) {
   return { code: d.code, name: d.name, teamId: d.teamId, teamShort: team.short, role: d.role, nextYear: career.year + 1 };
 }
 
-function maybeGenerateAiTransferNews(career) {
+function maybeGenerateAiTransferNews(career, humanTeamIds) {
   if (Math.random() > 0.22) return null;
+  const excluded = humanTeamIds || [career.playerTeamId];
   const driverPool = career.driverPool;
   const teams = career.teams;
-  const aiTeamIds = Object.keys(teams).filter(id => id !== career.playerTeamId);
+  const aiTeamIds = Object.keys(teams).filter(id => !excluded.includes(id));
   const shuffled = aiTeamIds.sort(() => Math.random() - 0.5);
   for (const teamId of shuffled) {
     const team = teams[teamId];
@@ -935,7 +948,7 @@ function maybeGenerateAiTransferNews(career) {
     const weakestSeat = raceSeats.sort((a, b) => a.driver.pace - b.driver.pace)[0];
     const candidates = Object.values(driverPool).filter(d => {
       if (d.retired || d.pendingTeamId !== undefined || d.code === weakestSeat.driver.code) return false;
-      if (d.teamId === career.playerTeamId) return false;
+      if (excluded.includes(d.teamId)) return false;
       if (d.teamId === teamId) return false;
       if (!d.teamId) return true;
       if (d.role !== 'race1' && d.role !== 'race2') return false;
@@ -1160,10 +1173,11 @@ function sponsorsCurrentlyActive(career) {
   return taken;
 }
 
-function maybeGenerateSponsorOffer(career) {
-  const team = career.teams[career.playerTeamId];
-  if (team && (team.sponsorDeals || []).length >= 5) return null;
-  const droughtRounds = career.roundsSinceSponsorOffer || 0;
+function maybeGenerateSponsorOffer(career, teamId) {
+  const team = career.teams[teamId];
+  if (!team) return null;
+  if ((team.sponsorDeals || []).length >= 5) return null;
+  const droughtRounds = team.roundsSinceSponsorOffer || 0;
   const guaranteed = droughtRounds >= 3;
   if (!guaranteed && Math.random() > 0.45) return null;
   const taken = sponsorsCurrentlyActive(career);
@@ -1171,7 +1185,7 @@ function maybeGenerateSponsorOffer(career) {
   if (!pool.length) return null;
   const sponsor = pick(pool);
   const constructorRank = Object.entries(career.constructorStandings).sort((a, b) => b[1] - a[1]);
-  const posIdx = constructorRank.findIndex(([id]) => id === career.playerTeamId);
+  const posIdx = constructorRank.findIndex(([id]) => id === teamId);
   const posFactor = posIdx < 0 ? 0.75 : clamp(1.2 - posIdx * 0.045, 0.65, 1.2);
   const tierMult = { 'Título': 1.3, 'Principal': 1.1, 'Técnico': 0.95, 'Associado': 0.8 }[sponsor.tier] || 1;
   const raceCount = randInt(6, 22);
@@ -1330,6 +1344,10 @@ function reducer(state, action) {
       return { ...state, tutorialPage: clamp(state.tutorialPage + action.delta, 0, 4) };
     case 'GOTO': return { ...state, phase: action.phase, tutorialPage: action.phase === 'tutorial' ? 0 : state.tutorialPage };
     case 'RESET': return { ...initialState };
+    case 'SEASON_END_RESTART_ONLINE':
+      return { ...initialState, phase: 'online-entry' };
+    case 'SEASON_END_GO_OFFLINE':
+      return { ...initialState, phase: 'career-team' };
 
     case 'SELECT_MODE':
       return { ...state, mode: action.mode, phase: action.mode === 'quick' ? 'team' : 'career-team' };
@@ -1483,30 +1501,32 @@ function reducer(state, action) {
     }
     case 'CAREER_CONTINUE': {
       const career = state.career;
+      const myTeamId = state.playerTeamId;
       if (career.roundIndex + 1 < career.calendar.length) {
         let advanced = { ...career, roundIndex: career.roundIndex + 1 };
-        const transferNews = maybeGenerateAiTransferNews(advanced);
+        const humanTeamIds = advanced.humanTeamIds && advanced.humanTeamIds.length ? advanced.humanTeamIds : [myTeamId];
+        const transferNews = maybeGenerateAiTransferNews(advanced, humanTeamIds);
         if (transferNews) {
           let driverPool = clearConflictingPending(advanced.driverPool, transferNews.teamId, transferNews.role, transferNews.code);
           driverPool = { ...driverPool, [transferNews.code]: { ...driverPool[transferNews.code], pendingTeamId: transferNews.teamId, pendingRole: transferNews.role } };
           advanced = { ...advanced, driverPool };
         }
-        const renewalNews = maybeGenerateAiRenewalNews(advanced);
+        const renewalNews = maybeGenerateAiRenewalNews(advanced, humanTeamIds);
         if (renewalNews) {
           let driverPool = clearConflictingPending(advanced.driverPool, renewalNews.teamId, renewalNews.role, renewalNews.code);
           driverPool = { ...driverPool, [renewalNews.code]: { ...driverPool[renewalNews.code], pendingTeamId: renewalNews.teamId, pendingRole: renewalNews.role } };
           advanced = { ...advanced, driverPool };
         }
-        const offer = maybeGenerateSponsorOffer(advanced);
+        const offer = maybeGenerateSponsorOffer(advanced, myTeamId);
         if (offer) {
-          advanced = { ...advanced, roundsSinceSponsorOffer: 0 };
+          advanced = { ...advanced, teams: { ...advanced.teams, [myTeamId]: { ...advanced.teams[myTeamId], roundsSinceSponsorOffer: 0 } } };
           return { ...state, career: advanced, phase: 'career-sponsor-offer', pendingSponsorOffer: offer, careerLastRaceApplied: null };
         }
-        advanced = { ...advanced, roundsSinceSponsorOffer: (advanced.roundsSinceSponsorOffer || 0) + 1 };
+        advanced = { ...advanced, teams: { ...advanced.teams, [myTeamId]: { ...advanced.teams[myTeamId], roundsSinceSponsorOffer: ((advanced.teams[myTeamId] && advanced.teams[myTeamId].roundsSinceSponsorOffer) || 0) + 1 } } };
         return { ...state, career: advanced, phase: 'career-hub', careerLastRaceApplied: null };
       }
       if (career.onlineLeague) {
-        return { ...state, phase: 'career-offseason-sync', careerLastRaceApplied: null };
+        return { ...state, phase: 'career-season-end', careerLastRaceApplied: null };
       }
       const off = processOffseason(career);
       return { ...state, career: { ...career, ...off }, phase: 'career-offseason', careerLastRaceApplied: null };
@@ -1705,7 +1725,6 @@ function reducer(state, action) {
     case 'TOGGLE_AUTOPLAY':
       return { ...state, autoPlay: !state.autoPlay };
     case 'SET_SPEED':
-      if (state.liveRace) return state;
       return { ...state, speed: action.speed };
 
     default:
@@ -1782,7 +1801,7 @@ function renderTeamCard(team, actionType) {
 function renderStatusBar(lap, totalLaps, flag, weather, roundLabel) {
   const weatherIcon = weather.condition === 'dry' ? '☀️' : '🌧️';
   return `
-    <div class="shrink-0 safe-top bg-slate-950 border-b border-slate-800 px-3 py-2 flex items-center justify-between">
+    <div class="shrink-0 safe-top landscape-compact-py bg-slate-950 border-b border-slate-800 px-3 py-2 flex items-center justify-between">
       <div>
         <div class="flex items-baseline gap-1.5">
           <span class="cm-display text-2xl font-bold text-slate-100 leading-none">${lap}</span>
@@ -1825,7 +1844,7 @@ function renderDriverCard(car, weather, isGuest) {
     return `<button ${isGuest ? `data-guest-pit="${car.id}" data-guest-pit-compound="${key}"` : `data-action="${act({ type: 'QUEUE_PIT', carId: car.id, compound: key })}"`} class="cm-mono text-xs px-1.5 py-1 rounded bg-slate-800 flex-1 ${car.pendingPit === key ? 'border-2 border-amber-400' : 'border border-slate-700'} ${mismatched ? 'opacity-40' : ''}" style="color:${cd.color}">${cd.short}</button>`;
   }).join('');
   const cancelButton = car.pendingPit ? `<button ${isGuest ? `data-guest-pit="${car.id}" data-guest-pit-compound=""` : `data-action="${act({ type: 'CANCEL_PIT', carId: car.id })}"`} class="cm-body text-xs px-1.5 py-1 rounded border border-slate-700 text-slate-400">✕</button>` : '';
-  return `<div class="bg-slate-900 border border-slate-800 rounded-md p-2">${infoRow}${tyreRow}<div class="grid grid-cols-3 gap-1 mb-1">${paceButtons}</div><div class="flex gap-1">${compoundButtons}${cancelButton}</div></div>`;
+  return `<div class="bg-slate-900 border border-slate-800 rounded-md p-2 landscape-compact-p">${infoRow}${tyreRow}<div class="grid grid-cols-3 gap-1 mb-1 landscape-tighten">${paceButtons}</div><div class="flex gap-1">${compoundButtons}${cancelButton}</div></div>`;
 }
 
 function renderGapSvg(history, carA, carB) {
@@ -1900,7 +1919,7 @@ function renderPlaybackBar(autoPlay, speed, lap) {
   const speedButtons = [1, 2, 4].map(s => `<button data-action="${act({ type: 'SET_SPEED', speed: s })}" class="cm-mono text-xs px-2 py-2 rounded border ${speed === s ? 'border-amber-400 text-amber-400' : 'border-slate-700 text-slate-400'}">${s}x</button>`).join('');
   const playLabel = autoPlay ? '⏸ Pausar' : (lap === 0 ? '▶ Iniciar corrida' : '▶ Retomar');
   return `
-    <div class="shrink-0 safe-bottom bg-slate-950 border-t border-slate-800 px-2 py-2 flex items-center gap-1.5">
+    <div class="shrink-0 safe-bottom landscape-compact-py bg-slate-950 border-t border-slate-800 px-2 py-2 flex items-center gap-1.5">
       <button data-action="${act({ type: 'TICK' })}" class="cm-body text-sm bg-slate-800 border border-slate-700 rounded-md py-2 px-3 flex items-center justify-center gap-1.5 text-slate-100 whitespace-nowrap">Avançar →</button>
       <div class="flex gap-1">${speedButtons}</div>
       <button data-action="${act({ type: 'TOGGLE_AUTOPLAY' })}" class="flex-1 bg-amber-500 text-slate-950 rounded-md px-3 py-2 cm-body text-sm font-semibold whitespace-nowrap">${playLabel}</button>
@@ -2135,12 +2154,14 @@ function renderCircuitSelectScreen(state) {
 
 function renderQualiScreen(state) {
   const isCareer = state.mode === 'career';
+  const poleScore = state.qualiResult.length ? state.qualiResult[0].score : 0;
   const rows = state.qualiResult.map(q => `
     <div class="flex items-center px-3 py-1.5 border-b border-slate-800 last:border-b-0">
       <span class="cm-mono text-sm w-7 text-slate-300">${q.grid}</span>
       <div class="w-1.5 h-4 rounded-sm mr-2" style="background-color:${q.color}"></div>
       <span class="cm-body text-sm text-slate-100 flex-1 truncate">${q.name}</span>
-      ${q.teamId === state.playerTeamId ? '<span class="cm-mono text-xs text-amber-400">VOCÊ</span>' : ''}
+      <span class="cm-mono text-xs text-slate-500 w-16 text-right shrink-0">${q.grid === 1 ? 'POLE' : '+' + ((poleScore - q.score) * 0.085).toFixed(3) + 's'}</span>
+      ${q.teamId === state.playerTeamId ? '<span class="cm-mono text-xs text-amber-400 ml-2">VOCÊ</span>' : ''}
     </div>
   `).join('');
   const header = isCareer ? `Rodada ${state.career.roundIndex + 1} de ${state.career.calendar.length} · ${state.career.year}` : 'CLASSIFICAÇÃO';
@@ -2250,15 +2271,15 @@ function renderRaceScreen(state) {
       ${renderStatusBar(state.lap, state.totalLaps, state.flag, state.weather, roundLabel)}
       <div class="flex-1 min-h-0 flex flex-col sm:flex-row overflow-hidden">
         <div class="sm:w-80 sm:shrink-0 shrink-0 sm:h-full sm:overflow-y-auto">
-          <div class="grid grid-cols-1 sm:grid-cols-1 gap-2 px-2 pt-2">${playerCars.map(c => renderDriverCard(c, state.weather, isGuest)).join('')}</div>
-          ${renderRainForecast(state)}
+          <div class="grid grid-cols-1 sm:grid-cols-1 gap-2 px-2 pt-2 landscape-tighten">${playerCars.map(c => renderDriverCard(c, state.weather, isGuest)).join('')}</div>
+          <div class="landscape-hide">${renderRainForecast(state)}</div>
           ${needsSecondCompound ? '<div class="cm-body text-xs text-amber-400 px-3 pt-1">⚠ é preciso usar 2 compostos diferentes na corrida (pista seca).</div>' : ''}
           ${renderGapChart(state.history, state.grid, state.playerCarIds)}
           ${renderEventTerminal(state.eventLog)}
         </div>
         <div class="flex-1 min-h-0 px-2 py-2">${renderTimingTower(state.grid)}</div>
       </div>
-      ${state.liveRace ? `<div class="shrink-0 safe-bottom bg-slate-950 border-t border-slate-800 px-3 py-3 text-center cm-body text-xs text-slate-400">${isGuest ? 'Sua estratégia (ritmo e pit stop) continua valendo — a corrida roda sozinha, sem pausar.' : 'Como anfitrião, a corrida roda sozinha a 1x, sem pausar — todos competem em tempo real.'}</div>` : renderPlaybackBar(state.autoPlay, state.speed, state.lap)}
+      ${state.liveRace ? `<div class="shrink-0 safe-bottom bg-slate-950 border-t border-slate-800 px-3 py-3 text-center cm-body text-xs text-slate-400">${isGuest ? 'Sua estratégia (ritmo e pit stop) continua valendo — a corrida roda sozinha, sem pausar.' : 'Como anfitrião, a corrida roda sozinha a 2x, sem pausar — todos competem em tempo real.'}</div>` : renderPlaybackBar(state.autoPlay, state.speed, state.lap)}
     </div>
   `;
 }
@@ -2364,7 +2385,6 @@ function renderCareerHubScreen(state) {
     { screen: 'calendar', icon: '📅', label: 'Calendário' }, { screen: 'standings', icon: '🏆', label: 'Classificação' },
     { screen: 'market', icon: '🔄', label: 'Mercado' }, { screen: 'upgrades', icon: '🔧', label: 'Upgrades' },
     { screen: 'sponsors', icon: '💰', label: 'Patrocínios' }, { screen: 'roster', icon: '🏎️', label: 'Elenco' },
-    { screen: 'league', icon: '🌐', label: 'Liga Online' },
   ].map(b => `
     <button data-action="${act({ type: 'CAREER_GOTO', screen: b.screen })}" class="bg-slate-900 border border-slate-800 rounded-md p-3 text-center hover:border-slate-600">
       <div class="text-xl mb-1">${b.icon}</div><div class="cm-body text-xs text-slate-300">${b.label}</div>
@@ -3001,6 +3021,59 @@ function renderCareerNewsScreen(state) {
   `;
 }
 
+function renderSeasonEndScreen(state) {
+  const career = state.career;
+  const driverRank = Object.entries(career.driverStandings).sort((a, b) => b[1] - a[1]);
+  const constructorRank = Object.entries(career.constructorStandings).sort((a, b) => b[1] - a[1]);
+  const driverChampCode = driverRank[0] ? driverRank[0][0] : null;
+  const driverChamp = driverChampCode ? career.driverPool[driverChampCode] : null;
+  const driverChampTeam = driverChamp && driverChamp.teamId ? career.teams[driverChamp.teamId] : null;
+  const constructorChampId = constructorRank[0] ? constructorRank[0][0] : null;
+  const constructorChamp = constructorChampId ? career.teams[constructorChampId] : null;
+
+  const driverRows = driverRank.slice(0, 8).map(([code, pts], i) => {
+    const d = career.driverPool[code];
+    if (!d) return '';
+    const t = d.teamId ? career.teams[d.teamId] : null;
+    return `
+      <div class="flex items-center px-3 py-1.5 border-b border-slate-800 last:border-b-0 ${d.teamId === state.playerTeamId ? 'bg-slate-800' : ''}">
+        <span class="cm-mono text-xs w-5 text-slate-500">${i + 1}</span>
+        <div class="w-1.5 h-4 rounded-sm mx-2" style="background-color:${t ? t.color : '#666'}"></div>
+        <span class="cm-body text-sm text-slate-100 flex-1 truncate">${d.name}</span>
+        <span class="cm-mono text-sm text-amber-400 font-semibold">${pts}</span>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="h-full flex flex-col overflow-hidden">
+      <div class="shrink-0 safe-top bg-slate-950 border-b border-slate-800 px-3 py-3 text-center">
+        <div class="cm-mono text-xs text-emerald-400">🏁 TEMPORADA ${career.year} ENCERRADA</div>
+      </div>
+      <div id="screen-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">
+        <div class="bg-slate-900 border border-amber-500 rounded-lg p-4 mb-3 text-center">
+          <div class="text-3xl mb-1">🏆</div>
+          <div class="cm-mono text-xs text-slate-500 mb-1">CAMPEÃO DE PILOTOS</div>
+          <div class="cm-display text-xl font-bold text-slate-100">${driverChamp ? driverChamp.name : '—'}</div>
+          <div class="cm-body text-xs text-slate-400">${driverChampTeam ? driverChampTeam.name : ''} · ${driverRank[0] ? driverRank[0][1] : 0} pts</div>
+        </div>
+        <div class="bg-slate-900 border border-slate-700 rounded-lg p-4 mb-4 text-center">
+          <div class="text-2xl mb-1">🛠️</div>
+          <div class="cm-mono text-xs text-slate-500 mb-1">CAMPEÃ DE CONSTRUTORES</div>
+          <div class="cm-display text-lg font-bold text-slate-100">${constructorChamp ? constructorChamp.name : '—'}</div>
+          <div class="cm-body text-xs text-slate-400">${constructorRank[0] ? constructorRank[0][1] : 0} pts</div>
+        </div>
+        <div class="cm-mono text-xs text-slate-500 mb-1">CLASSIFICAÇÃO FINAL — PILOTOS</div>
+        <div class="bg-slate-900 border border-slate-800 rounded-md mb-4">${driverRows}</div>
+      </div>
+      <div class="shrink-0 p-3 space-y-2 safe-bottom">
+        <button data-season-end-restart-online="1" class="w-full bg-emerald-600 text-white cm-body font-semibold py-3 rounded-md">🌐 Jogar novamente com amigos</button>
+        <button data-season-end-go-offline="1" class="w-full bg-slate-800 border border-slate-700 text-slate-200 cm-body font-semibold py-3 rounded-md">📋 Jogar offline</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderOffseasonSyncScreen(state) {
   return `
     <div class="h-full flex flex-col items-center justify-center p-4 text-center">
@@ -3094,6 +3167,7 @@ function renderApp(state) {
   if (p === 'career-profile') return renderCareerProfileScreen(state);
   if (p === 'career-offseason') return renderCareerOffseasonScreen(state);
   if (p === 'career-offseason-sync') return renderOffseasonSyncScreen(state);
+  if (p === 'career-season-end') return renderSeasonEndScreen(state);
   if (p === 'career-race-result') return renderCareerRaceResultScreen(state);
   return `<div class="h-full flex items-center justify-center cm-body text-slate-500">tela desconhecida: ${p}</div>`;
 }
@@ -3225,7 +3299,12 @@ async function pickOnlineTeam(state, teamId) {
       const freshCareer = initCareerState(teamId);
       freshCareer.managerName = state.onlineSetup.playerName;
       freshCareer.onlineLeague = { code, playerName: state.onlineSetup.playerName };
+      freshCareer.humanTeamIds = [teamId];
       await firebaseDb.ref(`leagues/${code}/sharedCareer`).set(freshCareer);
+    } else {
+      const existingCareer = careerSnap.val();
+      const humanTeamIds = Array.from(new Set([...(existingCareer.humanTeamIds || []), teamId]));
+      await firebaseDb.ref(`leagues/${code}/sharedCareer/humanTeamIds`).set(humanTeamIds);
     }
     dispatch({ type: 'ONLINE_TEAM_JOINED', teamId });
     startLobbyListener(code);
@@ -3319,6 +3398,7 @@ function runHostRace(code, round) {
   dispatch({ type: 'START_RACE' });
   dispatch({ type: 'LIVE_RACE_MARK_PARTICIPANTS', teamIds: participantTeamIds });
   dispatch({ type: 'LIVE_RACE_APPLY_PRERACE_CHOICES', readyTeams });
+  dispatch({ type: 'SET_SPEED', speed: 2 });
   dispatch({ type: 'TOGGLE_AUTOPLAY' });
   broadcastRaceState(code, round);
   decisionsListenerRef = firebaseDb.ref(`leagues/${code}/liveRace/${round}/decisions`);
@@ -3495,7 +3575,7 @@ async function handleSharedOffseason(code, career) {
 }
 
 function dispatch(action) {
-  if (action.type === 'RESET') clearCareerStorage();
+  if (action.type === 'RESET' || action.type === 'SEASON_END_RESTART_ONLINE' || action.type === 'SEASON_END_GO_OFFLINE') clearCareerStorage();
   const wasRacing = state.phase === 'race';
   state = reducer(state, action);
   saveCareerToStorage(state);
@@ -3630,6 +3710,10 @@ document.getElementById('root').addEventListener('click', (e) => {
   }
   const liveRaceEnterBtn = e.target.closest('[data-live-race-enter]');
   if (liveRaceEnterBtn) { enterLiveRace(state); return; }
+  const seasonEndRestartBtn = e.target.closest('[data-season-end-restart-online]');
+  if (seasonEndRestartBtn) { dispatch({ type: 'SEASON_END_RESTART_ONLINE' }); return; }
+  const seasonEndOfflineBtn = e.target.closest('[data-season-end-go-offline]');
+  if (seasonEndOfflineBtn) { dispatch({ type: 'SEASON_END_GO_OFFLINE' }); return; }
   const liveReadyBtn = e.target.closest('[data-live-ready]');
   if (liveReadyBtn) { markLiveRaceReady(state); return; }
   const liveCancelBtn = e.target.closest('[data-live-cancel]');
